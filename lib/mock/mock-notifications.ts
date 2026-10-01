@@ -1,0 +1,115 @@
+import type { OutlyNotification } from "@/types/notification";
+
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+}
+
+/** Seed notifications for the Notifications module, linking to real
+ * content already seeded elsewhere (posts, events, groups, conversations,
+ * partner requests) rather than fabricated targets. Frontend-only — see
+ * `context/notification-store-context.tsx`. */
+export const MOCK_NOTIFICATIONS: OutlyNotification[] = [
+  {
+    id: "notif-follow-vikram",
+    type: "follow",
+    actorId: "vikram-rao",
+    title: "Vikram Rao started following you",
+    href: "/people/vikram-rao",
+    createdAt: minutesAgo(15),
+    read: false,
+  },
+  {
+    id: "notif-like-post",
+    type: "like",
+    actorId: "rohan-mehta",
+    title: "Rohan Mehta liked your post",
+    body: "Just back from Kedarkantha — the ridge line at sunrise was unreal.",
+    href: "/feed/post-1",
+    createdAt: minutesAgo(40),
+    read: false,
+  },
+  {
+    id: "notif-comment-post",
+    type: "comment",
+    actorId: "isha-verma",
+    title: "Isha Verma commented on your post",
+    body: "That view never gets old. Great shot!",
+    href: "/feed/post-1",
+    createdAt: minutesAgo(60),
+    read: false,
+  },
+  {
+    id: "notif-join-request-kedarkantha",
+    type: "join_request",
+    actorId: "rohan-mehta",
+    title: "Rohan Mehta requested to join Kedarkantha Winter Trek",
+    href: "/events/event-kedarkantha-winter-batch/participants",
+    createdAt: minutesAgo(90),
+    read: false,
+  },
+  {
+    id: "notif-event-approval",
+    type: "event_approval",
+    title: "You're confirmed for Sinhagad Saturday Morning Group Hike",
+    href: "/events/event-sinhagad-group-hike",
+    createdAt: minutesAgo(180),
+    read: true,
+  },
+  {
+    id: "notif-event-reminder",
+    type: "event_reminder",
+    title: "Reminder: Sinhagad Saturday Morning Group Hike is coming up",
+    body: "Meet at the base parking lot, 6:00 AM.",
+    href: "/events/event-sinhagad-group-hike",
+    createdAt: minutesAgo(240),
+    read: true,
+  },
+  {
+    id: "notif-group-activity",
+    type: "group_activity",
+    actorId: "rohan-mehta",
+    title: "New activity in Bengaluru Trail Runners",
+    body: "Reminder: this Sunday's run starts at Cubbon Park gate 2, 6 AM.",
+    href: "/groups/group-bengaluru-trail-runners",
+    createdAt: minutesAgo(900),
+    read: true,
+  },
+  {
+    id: "notif-message-rohan",
+    type: "message",
+    actorId: "rohan-mehta",
+    title: "New message from Rohan Mehta",
+    body: "6 AM sharp — parking fills up fast on weekends.",
+    href: "/chat/conversation-rohan-mehta",
+    createdAt: minutesAgo(45),
+    read: false,
+  },
+  {
+    id: "notif-partner-request",
+    type: "join_request",
+    actorId: "priya-nair",
+    title: "Priya Nair requested to join your cycling partner request",
+    href: "/partner/partner-dehradun-cycling",
+    createdAt: minutesAgo(1200),
+    read: true,
+  },
+  {
+    id: "notif-review",
+    type: "review",
+    actorId: "isha-verma",
+    title: "Isha Verma reviewed Whispering Pines Trail",
+    body: "Rated 5 stars — “Perfect for a first-time hike.”",
+    href: "/explore/trails/trail-whispering-pines",
+    createdAt: minutesAgo(2000),
+    read: true,
+  },
+  {
+    id: "notif-moderation",
+    type: "moderation",
+    title: "Your report was reviewed",
+    body: "Thanks for flagging that post — our moderation team took action.",
+    href: "/feed",
+    createdAt: minutesAgo(4000),
+    read: true,
+  },
+];

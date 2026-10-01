@@ -1,0 +1,17 @@
+import type { Metadata } from "next";
+import { AppHeader } from "@/components/layout/app-header";
+import { AdminAnalyticsView } from "@/components/admin/admin-analytics-view";
+
+export const metadata: Metadata = {
+  title: "Admin analytics — OUTLY",
+  description: "A snapshot of platform activity across content, activities, and events.",
+};
+
+export default function AdminAnalyticsPage() {
+  return (
+    <div className="min-h-svh bg-[var(--outly-lavender)]">
+      <AppHeader />
+      <AdminAnalyticsView />
+    </div>
+  );
+}
