@@ -15,9 +15,11 @@ export function CreatePartnerRequestView() {
         description="Publish a request and let compatible explorers find you."
         submitLabel="Post request"
         onCancel={() => router.push("/partner")}
-        onSubmit={(values) => {
-          const request = createRequest(values);
+        onSubmit={async (values) => {
+          const { request, error } = await createRequest(values);
+          if (error || !request) return error;
           router.push(`/partner/${request.id}`);
+          return undefined;
         }}
       />
     </div>

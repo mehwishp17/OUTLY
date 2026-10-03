@@ -7,11 +7,16 @@ export const metadata: Metadata = {
   description: "View your OUTLY profile, interests, activity history, and saved places.",
 };
 
-export default function ProfilePage() {
+const TABS = ["activity", "saved", "about"] as const;
+
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  const initialTab = TABS.find((id) => id === tab);
+
   return (
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
-      <ProfileView />
+      <ProfileView initialTab={initialTab} />
     </div>
   );
 }

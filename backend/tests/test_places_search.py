@@ -124,3 +124,35 @@ def test_unified_search_respects_visibility(alice, bob, client_for, seeded, make
 def test_place_search_uses_index_friendly_query_count(alice, client_for, seeded, django_assert_max_num_queries):
     with django_assert_max_num_queries(6):
         client_for(alice).get("/api/v1/places/?search=fort&near=18.5,73.8&radius_km=200")
+
+
+def test_save_trail_and_saved_trails_list(alice, client_for, seeded):
+    c = client_for(alice)
+    tid = seeded.id
+    assert c.post(f"/api/v1/trails/{tid}/save/").status_code == 201
+    assert c.post(f"/api/v1/trails/{tid}/save/").status_code == 201  # idempotent
+    assert data(c.get(f"/api/v1/trails/{tid}/"))["is_saved"] is True
+    saved = data(c.get("/api/v1/users/me/saved-trails/"))
+    assert [t["id"] for t in saved] == [tid]
+    assert data(c.get("/api/v1/users/me/saved-places/")) == []  # trails never leak into the places list
+    assert c.delete(f"/api/v1/trails/{tid}/save/").status_code == 204
+    assert data(c.get("/api/v1/users/me/saved-trails/")) == []
+    assert c.post("/api/v1/trails/99999/save/").status_code == 404
+
+
+def test_trail_category_filter(alice, client_for, seeded):
+    Trail.objects.create(name="Ghat Ride", location="Pune", category="cycling-route", start_latitude=18.5, start_longitude=73.8)
+    c = client_for(alice)
+    assert [t["name"] for t in data(c.get("/api/v1/trails/?category=cycling-route"))] == ["Ghat Ride"]
+    assert data(c.get("/api/v1/trails/"))[0]["category"] in ("trail", "cycling-route")
+
+
+def test_seed_explore_is_idempotent_and_honest(db):
+    from django.core.management import call_command
+
+    call_command("seed_explore")
+    call_command("seed_explore")
+    assert Place.objects.count() == 4 and Trail.objects.count() == 4
+    kedar = Trail.objects.get(name="Kedarkantha Ridge Trail")
+    assert kedar.points.count() == 5 and kedar.images == ["/images/places/kedarkantha-trail.jpg"]
+    assert float(kedar.rating) == 0 and kedar.reviews_count == 0  # no invented ratings

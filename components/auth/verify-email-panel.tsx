@@ -1,39 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AuthFormCard } from "@/components/auth/auth-form-card";
 import { AuthMessage } from "@/components/auth/auth-message";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { mockResendVerification } from "@/lib/mock/mock-auth";
+import { resendVerification, verifyEmail } from "@/lib/api/auth";
 import type { AuthStatus } from "@/types/auth";
 
 type VerifyEmailPanelProps = {
   email: string;
+  /** The token from the link in the verification email, when the person arrived through it. */
+  token?: string;
 };
 
 /**
- * Frontend-only email verification screen. There is no real email being
- * sent — "Resend verification" simulates a request via
- * `mockResendVerification` and simply reports success/failure locally.
+ * Email verification screen. Arriving through the link in the verification
+ * email (`?token=...`) confirms the address with the backend; otherwise this
+ * is the "check your inbox" screen with a working "Resend" action.
  */
-export function VerifyEmailPanel({ email }: VerifyEmailPanelProps) {
+export function VerifyEmailPanel({ email, token }: VerifyEmailPanelProps) {
   const [status, setStatus] = useState<AuthStatus>("idle");
   const [message, setMessage] = useState<string>("");
+  const [verified, setVerified] = useState<"checking" | "ok" | "failed" | null>(token ? "checking" : null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    void verifyEmail(token).then((result) => {
+      if (cancelled) return;
+      setVerified(result.success ? "ok" : "failed");
+      setMessage(result.success ? result.message : (result.fieldErrors.token ?? result.message));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   async function handleResend() {
     setStatus("loading");
-    const result = await mockResendVerification(email);
+    const result = await resendVerification(email);
     setStatus(result.success ? "success" : "error");
     setMessage(result.message);
+  }
+
+  if (verified) {
+    return (
+      <AuthFormCard
+        eyebrow="Explore · Connect · Belong"
+        title={verified === "ok" ? "Email verified" : verified === "failed" ? "Link problem" : "Verifying…"}
+      >
+        {verified === "checking" ? (
+          <p className="flex items-center gap-2 text-sm text-[var(--outly-muted)]">
+            <LoadingSpinner /> Confirming your email address…
+          </p>
+        ) : (
+          <AuthMessage variant={verified === "ok" ? "success" : "error"} title={verified === "ok" ? "You're verified" : "We couldn't verify your email"}>
+            {message}
+          </AuthMessage>
+        )}
+        <Button href={verified === "ok" ? "/feed" : "/login"} className="mt-6 w-full" size="lg">
+          {verified === "ok" ? "Continue to OUTLY" : "Back to login"}
+        </Button>
+      </AuthFormCard>
+    );
   }
 
   return (
     <AuthFormCard
       eyebrow="Explore · Connect · Belong"
       title="Check your inbox"
-      description="We've prepared a verification step for your OUTLY account."
+      description="Open the verification link we emailed you to confirm your address."
     >
       <div className="space-y-5">
         <div className="rounded-[var(--radius-md)] border border-[var(--outly-border)] bg-[var(--outly-lavender)] px-4 py-3">
@@ -44,7 +82,7 @@ export function VerifyEmailPanel({ email }: VerifyEmailPanelProps) {
         </div>
 
         {status === "success" ? (
-          <AuthMessage variant="success" title="Verification email resent (mocked)">
+          <AuthMessage variant="success" title="Verification email resent">
             {message}
           </AuthMessage>
         ) : null}
@@ -53,11 +91,6 @@ export function VerifyEmailPanel({ email }: VerifyEmailPanelProps) {
             {message}
           </AuthMessage>
         ) : null}
-
-        <p className="text-sm leading-relaxed text-[var(--outly-muted)]">
-          This is a frontend-only preview — no verification email has actually been sent, and no
-          account has actually been verified.
-        </p>
 
         <Button
           type="button"

@@ -1,31 +1,48 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
-import { useAdminStore } from "@/context/admin-store-context";
+import { LoadingState } from "@/components/ui/loading-state";
+import { fetchAuditLog } from "@/lib/api/admin";
 import { formatRelativeTime } from "@/lib/utils";
-import { MODERATION_ACTION_LABELS } from "@/types/report";
-import type { ModerationActionType } from "@/types/report";
+import type { ModerationLogEntry } from "@/types/report";
 
-const ACTION_ICON: Record<ModerationActionType, "close" | "check-circle" | "shield-check"> = {
-  post_hidden: "close",
-  post_unhidden: "check-circle",
-  user_suspended: "close",
-  user_reinstated: "check-circle",
-  report_dismissed: "check-circle",
-  report_actioned: "shield-check",
-  place_verified: "shield-check",
-  place_unverified: "close",
-  event_cancelled: "close",
-};
+/** Icon for an audit entry: removals/suspensions look different from approvals and dismissals. */
+function iconFor(action: string): "close" | "check-circle" | "shield-check" {
+  if (/(hide|delete|suspend|restrict|rejected)/.test(action)) return "close";
+  if (/(no_action|approved)/.test(action)) return "check-circle";
+  return "shield-check";
+}
 
-/** Admin Moderation: an audit log of every moderation action taken
- * across the platform (resolving reports, hiding content, suspending
- * users, verifying places, cancelling events) — appended to in real time
- * by every other Admin screen via `useAdminStore().logAction`. */
+/** Admin Moderation (administrators): the audit log of every privileged
+ * action taken on the platform (resolving reports, hiding content,
+ * suspending users, verifying places, approving events and organizers),
+ * written by the backend at the moment each action happens. */
 export function AdminModerationView() {
-  const { moderationLog } = useAdminStore();
+  const [moderationLog, setModerationLog] = useState<ModerationLogEntry[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAuditLog().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setModerationLog(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const sorted = [...moderationLog].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
@@ -43,7 +60,11 @@ export function AdminModerationView() {
 
       <AdminNav active="/admin/moderation" />
 
-      {sorted.length === 0 ? (
+      {status === "loading" ? (
+        <LoadingState message="Loading the audit log…" />
+      ) : status === "error" ? (
+        <ErrorState title="We couldn't load the audit log" description={error} />
+      ) : sorted.length === 0 ? (
         <EmptyState
           icon="shield-check"
           title="No moderation actions yet"
@@ -60,13 +81,15 @@ export function AdminModerationView() {
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--outly-lavender)] text-[var(--outly-purple-dark)]"
                 aria-hidden="true"
               >
-                <Icon name={ACTION_ICON[entry.action]} className="h-4 w-4" />
+                <Icon name={iconFor(entry.action)} className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-[var(--outly-ink)]">
-                  {MODERATION_ACTION_LABELS[entry.action]}
+                  {entry.label}
                 </p>
-                <p className="truncate text-sm text-[var(--outly-muted)]">{entry.targetLabel}</p>
+                <p className="truncate text-sm text-[var(--outly-muted)]">
+                  {entry.targetLabel ? `${entry.targetLabel} · ` : ""}by {entry.actorName}
+                </p>
                 {entry.note ? (
                   <p className="mt-1 text-xs text-[var(--outly-muted)]">{entry.note}</p>
                 ) : null}

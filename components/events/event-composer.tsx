@@ -1,19 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChipButton } from "@/components/ui/chip-button";
+import { FormError } from "@/components/ui/form-error";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MOCK_PLACES } from "@/lib/mock/mock-places";
+import { fetchExplore } from "@/lib/api/places";
 import { validateEventForm } from "@/lib/validation/event-schema";
 import {
   EVENT_CATEGORY_LABELS,
   EVENT_VISIBILITY_LABELS,
 } from "@/types/event";
 import type { EventCategory, EventFormErrors, EventFormValues, EventVisibility } from "@/types/event";
-import { DIFFICULTY_LABELS } from "@/types/place";
-import type { Difficulty } from "@/types/place";
+import { DIFFICULTY_LABELS, exploreKey } from "@/types/place";
+import type { Difficulty, ExplorePlace } from "@/types/place";
 
 const CATEGORY_OPTIONS = Object.keys(EVENT_CATEGORY_LABELS) as EventCategory[];
 const VISIBILITY_OPTIONS = Object.keys(EVENT_VISIBILITY_LABELS) as EventVisibility[];
@@ -31,7 +32,8 @@ type EventComposerProps = {
   description?: string;
   initialValues?: Partial<EventFormValues> & { startAt?: string };
   submitLabel: string;
-  onSubmit: (values: EventFormValues) => void;
+  /** May return a promise resolving to an error message; the form then stays open and shows it. */
+  onSubmit: (values: EventFormValues) => void | Promise<string | undefined>;
   onCancel: () => void;
 };
 
@@ -57,17 +59,38 @@ export function EventComposer({
     visibility: initialValues?.visibility ?? "public",
   });
   const [errors, setErrors] = useState<EventFormErrors>({});
+  const [places, setPlaces] = useState<ExplorePlace[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string>();
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  // The places and trails an event can be linked to come from Explore.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchExplore().then((result) => {
+      if (!cancelled && result.ok) setPlaces(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     const validationErrors = validateEventForm(values);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
-    onSubmit(values);
+    setSubmitting(true);
+    setSubmitError(undefined);
+    const error = await onSubmit(values);
+    if (error) {
+      setSubmitError(error);
+      setSubmitting(false);
+    }
   }
 
   function handlePlaceChange(placeId: string) {
-    const place = MOCK_PLACES.find((candidate) => candidate.id === placeId);
+    const place = places.find((candidate) => exploreKey(candidate) === placeId);
     setValues((current) => ({
       ...current,
       placeId: placeId || undefined,
@@ -129,8 +152,8 @@ export function EventComposer({
             className="w-full rounded-[var(--radius-sm)] border border-[var(--outly-border)] bg-white px-4 py-2.5 text-sm text-[var(--outly-ink)] shadow-[var(--shadow-soft)] transition-colors focus:border-[var(--outly-violet)] focus:outline-none"
           >
             <option value="">None</option>
-            {MOCK_PLACES.map((place) => (
-              <option key={place.id} value={place.id}>
+            {places.map((place) => (
+              <option key={exploreKey(place)} value={exploreKey(place)}>
                 {place.name}
               </option>
             ))}
@@ -244,11 +267,15 @@ export function EventComposer({
           </div>
         </div>
 
+        {submitError ? <FormError id="event-submit-error">{submitError}</FormError> : null}
+
         <div className="flex flex-col gap-3 border-t border-[var(--outly-border)] pt-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit">{submitLabel}</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitLabel}
+          </Button>
         </div>
       </form>
     </div>

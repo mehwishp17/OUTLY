@@ -1,10 +1,8 @@
 /**
  * Shared types for the Communication module (Conversation List, Chat
- * Detail, Group Chat). Data lives in `context/chat-store-context.tsx` for
- * the browser session only — frontend-only, same pattern as the other
- * domain modules. Group Chat conversations reuse an existing
- * `Group.id` from the Groups & Communities module rather than a parallel
- * concept of "group" — see `Conversation.groupId`.
+ * Detail, Group Chat). Conversations and messages come from the OUTLY
+ * backend (`lib/api/chat.ts`) and live in `context/chat-store-context.tsx`.
+ * Group Chat conversations point at their group via `Conversation.groupId`.
  */
 
 export type ConversationKind = "direct" | "group";
@@ -17,19 +15,25 @@ export type ChatMessage = {
   senderAvatarUrl?: string;
   content: string;
   createdAt: string;
-  /** User ids who have read this message (includes the sender). */
-  readBy: string[];
+  editedAt?: string;
 };
 
 export type Conversation = {
   id: string;
   kind: ConversationKind;
-  /** Present for group chats — links back to a `Group.id` from the
-   * Groups & Communities module so the chat shares that group's name,
-   * gradient, and membership rather than duplicating them. */
+  /** Present for group chats — links back to a `Group.id`. */
   groupId?: string;
-  /** All participant ids, current user included. For a direct
-   * conversation this is always exactly two ids. */
+  groupName?: string;
+  /** The other people in the conversation (the signed-in user is not listed). */
   participantIds: string[];
+  /** Everyone in the conversation, the signed-in user included. */
+  participantCount: number;
+  /** Messages, oldest first. Loaded when the conversation is opened. */
   messages: ChatMessage[];
+  /** Whether `messages` has been loaded from the backend yet. */
+  messagesLoaded: boolean;
+  lastMessagePreview: string;
+  lastMessageAt?: string;
+  /** Messages from others that I haven't read (server-computed). */
+  unreadCount: number;
 };

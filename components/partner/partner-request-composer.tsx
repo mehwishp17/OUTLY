@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChipButton } from "@/components/ui/chip-button";
+import { FormError } from "@/components/ui/form-error";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { validatePartnerRequestForm } from "@/lib/validation/partner-schema";
@@ -27,7 +28,8 @@ type PartnerRequestComposerProps = {
   description?: string;
   initialValues?: Partial<PartnerRequestFormValues>;
   submitLabel: string;
-  onSubmit: (values: PartnerRequestFormValues) => void;
+  /** May return a promise resolving to an error message; the form then stays open and shows it. */
+  onSubmit: (values: PartnerRequestFormValues) => void | Promise<string | undefined>;
   onCancel: () => void;
 };
 
@@ -48,13 +50,22 @@ export function PartnerRequestComposer({
     description: initialValues?.description ?? "",
   });
   const [errors, setErrors] = useState<PartnerRequestFormErrors>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string>();
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     const validationErrors = validatePartnerRequestForm(values);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
-    onSubmit(values);
+    setSubmitting(true);
+    setSubmitError(undefined);
+    const error = await onSubmit(values);
+    if (error) {
+      setSubmitError(error);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -149,11 +160,15 @@ export function PartnerRequestComposer({
           placeholder="What are you planning, and who are you looking for?"
         />
 
+        {submitError ? <FormError id="partner-submit-error">{submitError}</FormError> : null}
+
         <div className="flex flex-col gap-3 border-t border-[var(--outly-border)] pt-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit">{submitLabel}</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitLabel}
+          </Button>
         </div>
       </form>
     </div>

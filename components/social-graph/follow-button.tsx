@@ -12,17 +12,18 @@ type FollowButtonProps = {
  * and the Followers/Following lists. Renders nothing for the current
  * user's own id — you can't follow yourself. */
 export function FollowButton({ userId, size = "md" }: FollowButtonProps) {
-  const { isFollowing, follow, unfollow } = useFollowStore();
+  const { isFollowing, isPending, follow, unfollow } = useFollowStore();
   const following = isFollowing(userId);
+  const requested = isPending(userId);
 
   return (
     <Button
       size={size}
-      variant={following ? "secondary" : "primary"}
-      onClick={() => (following ? unfollow(userId) : follow(userId))}
-      aria-label={following ? "Unfollow" : "Follow"}
+      variant={following || requested ? "secondary" : "primary"}
+      onClick={() => (following || requested ? unfollow(userId) : follow(userId))}
+      aria-label={following ? "Unfollow" : requested ? "Cancel follow request" : "Follow"}
     >
-      {following ? "Following" : "Follow"}
+      {following ? "Following" : requested ? "Requested" : "Follow"}
     </Button>
   );
 }

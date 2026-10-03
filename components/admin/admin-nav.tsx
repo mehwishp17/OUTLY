@@ -1,5 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useAdminStore } from "@/context/admin-store-context";
 import { cn } from "@/lib/utils";
+
+// Moderators only get the screens their role allows; the backend enforces it as well.
+const MODERATOR_LINKS = new Set<string>(["/admin/content", "/admin/reports", "/admin/events"]);
 
 const LINKS = [
   { href: "/admin", label: "Dashboard" },
@@ -20,9 +26,12 @@ type AdminNavProps = {
  * distinct route (per the Admin Module's screen list) without adding
  * eight more entries to the signed-in `AppHeader`. */
 export function AdminNav({ active }: AdminNavProps) {
+  const { isAdministrator } = useAdminStore();
+  const links = isAdministrator ? LINKS : LINKS.filter((link) => MODERATOR_LINKS.has(link.href));
+
   return (
     <nav aria-label="Admin sections" className="flex flex-wrap gap-2">
-      {LINKS.map((link) => (
+      {links.map((link) => (
         <Link
           key={link.href}
           href={link.href}

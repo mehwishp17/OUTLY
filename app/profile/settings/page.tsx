@@ -13,9 +13,9 @@ export default function ProfileSettingsPage() {
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-12">
-        <h1 className="text-2xl font-bold text-[var(--outly-ink)]">Privacy settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--outly-ink)] sm:text-3xl">Privacy settings</h1>
         <p className="mt-1 text-sm text-[var(--outly-muted)]">
-          These settings apply for this session only and reset on reload.
+          Choose who can see your profile, activity history, and saved places.
         </p>
         <div className="mt-6 rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-8">
           <PrivacySettingsForm />

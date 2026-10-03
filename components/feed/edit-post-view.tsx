@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { PostComposer } from "@/components/feed/post-composer";
@@ -14,15 +14,21 @@ type EditPostViewProps = {
 
 export function EditPostView({ postId }: EditPostViewProps) {
   const router = useRouter();
-  const { isCurrentUser, getPostById, editPost, editBackendPost, feedStatus, ensureFeedLoaded } =
-    useSocialStore();
+  const { isCurrentUser, getPostById, editPost, loadPostById } = useSocialStore();
   const post = getPostById(postId);
+  const [loading, setLoading] = useState(!post);
 
   useEffect(() => {
-    void ensureFeedLoaded();
-  }, [ensureFeedLoaded]);
+    let cancelled = false;
+    void loadPostById(postId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [postId, loadPostById]);
 
-  if (!post && (feedStatus === "idle" || feedStatus === "loading")) {
+  if (!post && loading) {
     return <LoadingState message="Loading post…" />;
   }
 
@@ -56,15 +62,10 @@ export function EditPostView({ postId }: EditPostViewProps) {
         initialContent={post.content}
         initialLocation={post.location}
         initialImages={post.images}
-        captionOnly={post.persisted}
         onCancel={() => router.push(`/feed/${post.id}`)}
         onSubmit={async (values) => {
-          if (post.persisted) {
-            const error = await editBackendPost(post.id, values.content);
-            if (error) return error;
-          } else {
-            editPost(post.id, values);
-          }
+          const error = await editPost(post.id, values);
+          if (error) return error;
           router.push(`/feed/${post.id}`);
           return undefined;
         }}

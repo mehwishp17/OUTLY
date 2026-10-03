@@ -25,10 +25,10 @@ const INITIAL_DATA: OnboardingData = {
 };
 
 /**
- * Multi-step onboarding flow. All state lives in this component only
- * (`useState`) — nothing is persisted to a backend, `localStorage`, or a
- * session. Going back and forth between steps never loses a selection
- * because `data` is only ever updated, never reset, while navigating.
+ * Multi-step onboarding flow. Choices live in this component while the
+ * person moves between steps (going back never loses a selection because
+ * `data` is only ever updated, never reset) and are saved to their profile
+ * on the final "Start exploring" step.
  */
 export function OnboardingFlow() {
   const [stepIndex, setStepIndex] = useState(0);

@@ -1,35 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { UserRow } from "@/components/social-graph/user-row";
 import { Icon } from "@/components/ui/icon";
 import { useSocialStore } from "@/context/social-store-context";
-import { MOCK_OTHER_USERS } from "@/lib/mock/mock-users";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { searchPeople } from "@/lib/api/follows";
 import { resolveUserSummary } from "@/lib/user-directory";
 
-/** User Search: every known user (the current mock user included),
- * filterable by name, username, or bio. */
+/** User Search: find OUTLY members by name or username (searched by the backend). */
 export function UserSearchView() {
   const { currentUser } = useSocialStore();
   const [query, setQuery] = useState("");
 
-  const allUsers = useMemo(() => {
-    const ids = [currentUser.id, ...MOCK_OTHER_USERS.map((user) => user.id)];
-    return ids
-      .map((id) => resolveUserSummary(id, currentUser))
-      .filter((user) => user !== undefined);
-  }, [currentUser]);
+  const [ids, setIds] = useState<string[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
 
-  const results = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return allUsers;
-    return allUsers.filter(
-      (user) =>
-        user.name.toLowerCase().includes(normalized) ||
-        user.username.toLowerCase().includes(normalized) ||
-        user.bio?.toLowerCase().includes(normalized),
-    );
-  }, [allUsers, query]);
+  // The backend does the searching (blocked users and yourself are left out); typing is debounced.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const result = await searchPeople(query);
+      if (cancelled) return;
+      if (result.ok) {
+        setIds(result.data);
+        setError(undefined);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    }, query ? 300 : 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  const results = ids
+    .map((id) => resolveUserSummary(id, currentUser))
+    .filter((user) => user !== undefined);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -57,7 +69,11 @@ export function UserSearchView() {
         />
       </div>
 
-      {results.length === 0 ? (
+      {status === "loading" && results.length === 0 ? (
+        <LoadingState message="Searching…" />
+      ) : status === "error" && results.length === 0 ? (
+        <ErrorState title="We couldn't search right now" description={error} />
+      ) : results.length === 0 ? (
         <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-10 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
           No one matches that search.
         </p>

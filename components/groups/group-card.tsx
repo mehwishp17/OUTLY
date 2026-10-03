@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CoverImage } from "@/components/ui/cover-image";
 import { Icon } from "@/components/ui/icon";
-import { GROUP_PHOTOS } from "@/lib/adventure-images";
 import type { Group } from "@/types/group";
 
 type GroupCardProps = {
@@ -9,8 +8,6 @@ type GroupCardProps = {
 };
 
 export function GroupCard({ group }: GroupCardProps) {
-  const photo = GROUP_PHOTOS[group.id];
-
   return (
     <Link
       href={`/groups/${group.id}`}
@@ -22,7 +19,9 @@ export function GroupCard({ group }: GroupCardProps) {
         role="img"
         aria-label={`${group.name} — illustrative visual`}
       >
-        {photo ? <CoverImage src={photo} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" /> : null}
+        {group.imageUrl ? (
+          <CoverImage src={group.imageUrl} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" />
+        ) : null}
         <span className="relative flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
           <Icon name={group.visibility === "private" ? "shield-check" : "compass"} className="h-3.5 w-3.5" />
           {group.visibility === "private" ? "Private" : "Public"}
@@ -38,7 +37,7 @@ export function GroupCard({ group }: GroupCardProps) {
         </p>
         <p className="flex items-center gap-1 text-xs text-[var(--outly-muted)]">
           <Icon name="compass" className="h-3.5 w-3.5" />
-          {group.members.length} member{group.members.length === 1 ? "" : "s"}
+          {group.memberCount} member{group.memberCount === 1 ? "" : "s"}
         </p>
       </div>
     </Link>

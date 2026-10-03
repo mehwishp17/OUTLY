@@ -1,161 +1,208 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { MOCK_GROUPS } from "@/lib/mock/mock-groups";
 import { useSocialStore } from "@/context/social-store-context";
+import {
+  createGroupRequest,
+  deleteGroupRequest,
+  editGroupRequest,
+  fetchGroup,
+  fetchGroups,
+  joinGroupRequest,
+  leaveGroupRequest,
+  removeMemberRequest,
+  reviewJoinRequest,
+  setMemberRoleRequest,
+} from "@/lib/api/groups";
 import type { Group, GroupFormValues, GroupRole } from "@/types/group";
 
 export type LeaveGroupResult = "left" | "owner-must-transfer-first";
+export type JoinGroupResult = "joined" | "requested";
+
+type LoadStatus = "idle" | "loading" | "ready" | "error";
+type LoadError = { message: string; status: number };
 
 type GroupStoreValue = {
   groups: Group[];
+  status: LoadStatus;
+  error: LoadError | null;
+  /** (Re)loads the group list from the backend. */
+  refresh: () => Promise<void>;
+  /** Loads one group with its members (and pending requests for moderators). */
+  loadGroup: (groupId: string) => Promise<LoadError | null>;
   getGroupById: (groupId: string) => Group | undefined;
-  createGroup: (input: GroupFormValues) => Group;
-  editGroup: (groupId: string, input: GroupFormValues) => void;
-  deleteGroup: (groupId: string) => void;
-  joinGroup: (groupId: string) => void;
-  leaveGroup: (groupId: string) => LeaveGroupResult;
-  setMemberRole: (groupId: string, userId: string, role: GroupRole) => void;
-  removeMember: (groupId: string, userId: string) => void;
+  /** Every mutation resolves with an error message (or `error`) on failure. */
+  createGroup: (input: GroupFormValues) => Promise<{ group?: Group; error?: string }>;
+  editGroup: (groupId: string, input: GroupFormValues) => Promise<string | undefined>;
+  deleteGroup: (groupId: string) => Promise<string | undefined>;
+  joinGroup: (groupId: string) => Promise<{ result?: JoinGroupResult; error?: string }>;
+  leaveGroup: (groupId: string) => Promise<{ result?: LeaveGroupResult; error?: string }>;
+  setMemberRole: (groupId: string, userId: string, role: GroupRole) => Promise<string | undefined>;
+  removeMember: (groupId: string, userId: string) => Promise<string | undefined>;
+  /** Moderators accept or decline someone's request to join a private group. */
+  reviewRequest: (groupId: string, requestId: string, accept: boolean) => Promise<string | undefined>;
 };
 
 const GroupStoreContext = createContext<GroupStoreValue | null>(null);
 
-let localGroupIdCounter = 0;
-
-function nextGroupId(): string {
-  localGroupIdCounter += 1;
-  return `group-local-${Date.now()}-${localGroupIdCounter}`;
-}
-
-const SEED_GRADIENTS = [
-  "linear-gradient(135deg, #351080, #7c3aed)",
-  "linear-gradient(135deg, #7c3aed, #ec4899)",
-  "linear-gradient(135deg, #5b21b6, #f6339a)",
-  "linear-gradient(135deg, #351080, #ec4899)",
-];
-
 /**
- * Session-only mock "backend" for the Groups & Communities module
- * (Groups List, Group Detail, Group Feed, Members, Create/Edit Group).
- * Group Feed itself reuses `useSocialStore`'s posts (filtered by
- * `Post.groupId`) rather than a parallel post system. Nothing here
- * persists beyond the current browser session.
+ * Groups & Communities state, backed by the OUTLY backend
+ * (`lib/api/groups.ts`). A group's own feed is handled by the social store
+ * (group posts are posts with a `groupId`). Membership changes also refresh
+ * the profile's "Joined communities".
  */
 export function GroupStoreProvider({ children }: { children: ReactNode }) {
-  const { currentUser } = useSocialStore();
-  const [groups, setGroups] = useState<Group[]>(MOCK_GROUPS);
+  const { refreshProfileExtras } = useSocialStore();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const groupsRef = useRef<Group[]>([]);
+  const [status, setStatus] = useState<LoadStatus>("idle");
+  const [error, setError] = useState<LoadError | null>(null);
+  const inflight = useRef<Promise<void> | null>(null);
 
-  const getGroupById = useCallback(
-    (groupId: string) => groups.find((group) => group.id === groupId),
-    [groups],
+  const setList = useCallback((updater: (current: Group[]) => Group[]) => {
+    const next = updater(groupsRef.current);
+    groupsRef.current = next;
+    setGroups(next);
+  }, []);
+
+  const refresh = useCallback((): Promise<void> => {
+    if (inflight.current) return inflight.current;
+    inflight.current = (async () => {
+      setStatus((current) => (current === "ready" ? current : "loading"));
+      const result = await fetchGroups();
+      if (result.ok) {
+        setError(null);
+        setList((current) => {
+          const known = new Map(current.map((group) => [group.id, group]));
+          // Keep member lists already loaded for groups we are showing.
+          return result.data.map((group) => {
+            const before = known.get(group.id);
+            return before && before.members.length > 0
+              ? { ...group, members: before.members, joinRequests: before.joinRequests }
+              : group;
+          });
+        });
+        setStatus("ready");
+      } else {
+        setError({ message: result.message, status: result.status });
+        setStatus("error");
+      }
+    })().finally(() => {
+      inflight.current = null;
+    });
+    return inflight.current;
+  }, [setList]);
+
+  const loadGroup = useCallback(
+    async (groupId: string): Promise<LoadError | null> => {
+      const result = await fetchGroup(groupId);
+      if (!result.ok) return { message: result.message, status: result.status };
+      setList((current) =>
+        current.some((group) => group.id === groupId)
+          ? current.map((group) => (group.id === groupId ? result.data : group))
+          : [result.data, ...current],
+      );
+      return null;
+    },
+    [setList],
   );
+
+  const getGroupById = useCallback((groupId: string) => groups.find((group) => group.id === groupId), [groups]);
 
   const createGroup = useCallback(
-    (input: GroupFormValues) => {
-      const newGroup: Group = {
-        id: nextGroupId(),
-        name: input.name.trim(),
-        description: input.description.trim(),
-        category: input.category.trim(),
-        visibility: input.visibility,
-        rules: input.rules?.trim() || undefined,
-        gradient: SEED_GRADIENTS[groups.length % SEED_GRADIENTS.length],
-        members: [{ id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl, role: "owner" }],
-      };
-      setGroups((current) => [newGroup, ...current]);
-      return newGroup;
+    async (input: GroupFormValues) => {
+      const result = await createGroupRequest(input);
+      if (!result.ok) return { error: result.message };
+      setList((current) => [result.data, ...current.filter((group) => group.id !== result.data.id)]);
+      void refreshProfileExtras();
+      return { group: result.data };
     },
-    [currentUser, groups.length],
+    [setList, refreshProfileExtras],
   );
 
-  const editGroup = useCallback((groupId: string, input: GroupFormValues) => {
-    setGroups((current) =>
-      current.map((group) =>
-        group.id === groupId
-          ? {
-              ...group,
-              name: input.name.trim(),
-              description: input.description.trim(),
-              category: input.category.trim(),
-              visibility: input.visibility,
-              rules: input.rules?.trim() || undefined,
-            }
-          : group,
-      ),
-    );
-  }, []);
+  const editGroup = useCallback(
+    async (groupId: string, input: GroupFormValues) => {
+      const result = await editGroupRequest(groupId, input);
+      if (!result.ok) return result.message;
+      await loadGroup(groupId);
+      return undefined;
+    },
+    [loadGroup],
+  );
 
-  const deleteGroup = useCallback((groupId: string) => {
-    setGroups((current) => current.filter((group) => group.id !== groupId));
-  }, []);
+  const deleteGroup = useCallback(
+    async (groupId: string) => {
+      const result = await deleteGroupRequest(groupId);
+      if (!result.ok) return result.message;
+      setList((current) => current.filter((group) => group.id !== groupId));
+      void refreshProfileExtras();
+      return undefined;
+    },
+    [setList, refreshProfileExtras],
+  );
 
   const joinGroup = useCallback(
-    (groupId: string) => {
-      setGroups((current) =>
-        current.map((group) => {
-          if (group.id !== groupId) return group;
-          if (group.members.some((member) => member.id === currentUser.id)) return group;
-          return {
-            ...group,
-            members: [
-              ...group.members,
-              { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl, role: "member" },
-            ],
-          };
-        }),
-      );
+    async (groupId: string) => {
+      const result = await joinGroupRequest(groupId);
+      if (!result.ok) return { error: result.message };
+      await loadGroup(groupId);
+      void refreshProfileExtras();
+      return { result: (result.data.status === "JOINED" ? "joined" : "requested") as JoinGroupResult };
     },
-    [currentUser],
+    [loadGroup, refreshProfileExtras],
   );
 
   const leaveGroup = useCallback(
-    (groupId: string): LeaveGroupResult => {
-      const group = groups.find((candidate) => candidate.id === groupId);
-      const membership = group?.members.find((member) => member.id === currentUser.id);
-      if (membership?.role === "owner") return "owner-must-transfer-first";
-
-      setGroups((current) =>
-        current.map((candidate) =>
-          candidate.id === groupId
-            ? { ...candidate, members: candidate.members.filter((member) => member.id !== currentUser.id) }
-            : candidate,
-        ),
-      );
-      return "left";
+    async (groupId: string) => {
+      const group = groupsRef.current.find((candidate) => candidate.id === groupId);
+      if (group?.myRole === "owner") return { result: "owner-must-transfer-first" as LeaveGroupResult };
+      const result = await leaveGroupRequest(groupId);
+      if (!result.ok) return { error: result.message };
+      await loadGroup(groupId);
+      void refreshProfileExtras();
+      return { result: "left" as LeaveGroupResult };
     },
-    [groups, currentUser],
+    [loadGroup, refreshProfileExtras],
   );
 
-  const setMemberRole = useCallback((groupId: string, userId: string, role: GroupRole) => {
-    setGroups((current) =>
-      current.map((group) =>
-        group.id === groupId
-          ? {
-              ...group,
-              members: group.members.map((member) =>
-                member.id === userId ? { ...member, role } : member,
-              ),
-            }
-          : group,
-      ),
-    );
-  }, []);
+  const setMemberRole = useCallback(
+    async (groupId: string, userId: string, role: GroupRole) => {
+      const result = await setMemberRoleRequest(groupId, userId, role);
+      if (!result.ok) return result.message;
+      await loadGroup(groupId);
+      return undefined;
+    },
+    [loadGroup],
+  );
 
-  const removeMember = useCallback((groupId: string, userId: string) => {
-    setGroups((current) =>
-      current.map((group) =>
-        group.id === groupId
-          ? { ...group, members: group.members.filter((member) => member.id !== userId) }
-          : group,
-      ),
-    );
-  }, []);
+  const removeMember = useCallback(
+    async (groupId: string, userId: string) => {
+      const result = await removeMemberRequest(groupId, userId);
+      if (!result.ok) return result.message;
+      await loadGroup(groupId);
+      return undefined;
+    },
+    [loadGroup],
+  );
+
+  const reviewRequest = useCallback(
+    async (groupId: string, requestId: string, accept: boolean) => {
+      const result = await reviewJoinRequest(groupId, requestId, accept);
+      if (!result.ok) return result.message;
+      await loadGroup(groupId);
+      return undefined;
+    },
+    [loadGroup],
+  );
 
   const value = useMemo<GroupStoreValue>(
     () => ({
       groups,
+      status,
+      error,
+      refresh,
+      loadGroup,
       getGroupById,
       createGroup,
       editGroup,
@@ -164,8 +211,9 @@ export function GroupStoreProvider({ children }: { children: ReactNode }) {
       leaveGroup,
       setMemberRole,
       removeMember,
+      reviewRequest,
     }),
-    [groups, getGroupById, createGroup, editGroup, deleteGroup, joinGroup, leaveGroup, setMemberRole, removeMember],
+    [groups, status, error, refresh, loadGroup, getGroupById, createGroup, editGroup, deleteGroup, joinGroup, leaveGroup, setMemberRole, removeMember, reviewRequest],
   );
 
   return <GroupStoreContext.Provider value={value}>{children}</GroupStoreContext.Provider>;

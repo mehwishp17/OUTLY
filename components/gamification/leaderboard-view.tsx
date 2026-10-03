@@ -1,35 +1,56 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GamificationNav } from "@/components/gamification/gamification-nav";
 import { Avatar } from "@/components/ui/avatar";
-import { useActivityStore } from "@/context/activity-store-context";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useSocialStore } from "@/context/social-store-context";
-import { computeUserStats } from "@/lib/gamification";
-import { MOCK_OTHER_USERS } from "@/lib/mock/mock-users";
+import { fetchLeaderboard } from "@/lib/api/gamification";
+import type { LeaderboardEntry } from "@/lib/api/gamification";
 import { resolveUserSummary } from "@/lib/user-directory";
 import { cn } from "@/lib/utils";
 
 const RANK_MEDAL_CLASSES = ["bg-[#f6c85f] text-[#5b3a00]", "bg-[#d8d8e0] text-[#3d3d47]", "bg-[#d99a63] text-[#4a2c0f]"];
 
-/** Leaderboard: ranks every known user by total distance across
- * completed activities — computed from the same real `Activity` data as
- * Badges/Achievements, not a separate fabricated ranking. */
+/** Leaderboard: ranks members by total distance across completed
+ * activities, computed by the backend (members with a private profile are
+ * left off). You are always listed, even before your first activity. */
 export function LeaderboardView() {
   const { currentUser } = useSocialStore();
-  const { activities } = useActivityStore();
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
 
-  const ranked = [currentUser.id, ...MOCK_OTHER_USERS.map((user) => user.id)]
-    .map((userId) => {
-      const user = resolveUserSummary(userId, currentUser);
-      const stats = computeUserStats(userId, activities);
-      return user ? { user, stats } : undefined;
+  useEffect(() => {
+    let cancelled = false;
+    void fetchLeaderboard().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setEntries(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const ranked = entries
+    .map((entry) => {
+      const user = resolveUserSummary(entry.userId, currentUser);
+      return user ? { user, stats: { completedCount: entry.completedCount, totalDistanceKm: entry.distanceKm } } : undefined;
     })
-    .filter((entry) => entry !== undefined)
-    .sort(
-      (a, b) =>
-        b.stats.totalDistanceKm - a.stats.totalDistanceKm || b.stats.completedCount - a.stats.completedCount,
-    );
+    .filter((entry) => entry !== undefined);
+  if (status === "ready" && currentUser.id && !ranked.some((entry) => entry.user.isCurrentUser)) {
+    const me = resolveUserSummary(currentUser.id, currentUser);
+    if (me) ranked.push({ user: me, stats: { completedCount: 0, totalDistanceKm: 0 } });
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -44,6 +65,14 @@ export function LeaderboardView() {
 
       <GamificationNav active="leaderboard" />
 
+      {status === "loading" ? (
+        <LoadingState message="Loading the leaderboard…" />
+      ) : status === "error" ? (
+        <ErrorState title="We couldn't load the leaderboard" description={error} />
+      ) : ranked.length === 0 ? (
+        <EmptyState icon="trophy" title="No rankings yet" description="Complete an activity to get on the board." />
+      ) : null}
+
       <ol className="flex flex-col gap-2">
         {ranked.map(({ user, stats }, index) => (
           <li key={user.id}>
@@ -51,7 +80,7 @@ export function LeaderboardView() {
               href={user.isCurrentUser ? "/profile" : `/people/${user.id}`}
               className={cn(
                 "flex items-center gap-3 rounded-[var(--radius-lg)] border bg-white p-4 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] motion-reduce:transition-none motion-reduce:hover:translate-y-0",
-                user.isCurrentUser ? "border-[var(--outly-violet)]/40" : "border-[var(--outly-border)]",
+                user.isCurrentUser ? "border-[var(--outly-violet)]/40 bg-[var(--outly-lavender)]/60" : "border-[var(--outly-border)]",
               )}
             >
               <span

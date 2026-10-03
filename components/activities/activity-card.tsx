@@ -20,7 +20,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
   return (
     <Link
       href={`/activities/${activity.id}`}
-      className="flex items-start gap-4 rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-5 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="group flex items-start gap-4 rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-5 shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <span
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-white gradient-brand"
@@ -53,8 +53,8 @@ export function ActivityCard({ activity }: ActivityCardProps) {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {activity.difficulty ? <DifficultyBadge difficulty={activity.difficulty} /> : null}
           <span className="text-xs text-[var(--outly-muted)]">
-            {activity.participants.length} participant
-            {activity.participants.length === 1 ? "" : "s"}
+            {activity.participantCount} participant
+            {activity.participantCount === 1 ? "" : "s"}
           </span>
         </div>
       </div>

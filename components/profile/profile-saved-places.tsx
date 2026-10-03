@@ -40,7 +40,7 @@ export function ProfileSavedPlaces({ places, onRemove }: ProfileSavedPlacesProps
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <Link
-              href="/feed"
+              href={place.href ?? "/explore"}
               className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--outly-violet)] hover:bg-[var(--outly-lavender)]"
             >
               View

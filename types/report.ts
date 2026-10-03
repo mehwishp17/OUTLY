@@ -1,11 +1,19 @@
 /**
- * Shared types for Reporting & Moderation (the data layer behind the
- * Admin module's Reports and Moderation screens). Data lives in
- * `context/admin-store-context.tsx` for the browser session only —
- * frontend-only, same pattern as the other domain modules.
+ * Shared types for Reporting & Moderation and the Admin screens. Reports,
+ * moderation actions and the audit log live in the OUTLY backend
+ * (`lib/api/admin.ts`); the backend enforces who may do what, so these
+ * screens only show what the signed-in staff role is allowed to see.
  */
 
-export type ReportTargetType = "post" | "user";
+export type ReportTargetType =
+  | "post"
+  | "comment"
+  | "user"
+  | "event"
+  | "group"
+  | "place"
+  | "message"
+  | "review";
 
 export type ReportReason =
   | "spam"
@@ -14,38 +22,34 @@ export type ReportReason =
   | "misinformation"
   | "other";
 
-export type ReportStatus = "open" | "actioned" | "dismissed";
+export type ReportStatus = "open" | "in_review" | "actioned" | "dismissed";
 
 export type Report = {
   id: string;
   reporterId: string;
+  reporterName: string;
   targetType: ReportTargetType;
   targetId: string;
-  /** Short label for the reported content/account, captured at report
-   * time so the Admin Reports list reads clearly even if the target is
-   * later hidden, suspended, or deleted. */
+  /** Short text about what was reported (the post's text, the person's name...). */
   targetLabel: string;
-  reason: ReportReason;
+  reason: string;
   description?: string;
   status: ReportStatus;
+  priority: "low" | "normal" | "high" | "urgent";
   createdAt: string;
 };
 
-export type ModerationActionType =
-  | "post_hidden"
-  | "post_unhidden"
-  | "user_suspended"
-  | "user_reinstated"
-  | "report_dismissed"
-  | "report_actioned"
-  | "place_verified"
-  | "place_unverified"
-  | "event_cancelled";
+/** What a moderator can do about a report (the backend rejects combinations that don't make sense). */
+export type ModerationDecision = "NO_ACTION" | "WARNING" | "HIDE" | "DELETE" | "RESTRICT" | "SUSPEND";
 
 export type ModerationLogEntry = {
   id: string;
-  action: ModerationActionType;
+  /** Raw backend action, e.g. "moderation.hide". */
+  action: string;
+  /** Human-readable summary of the action. */
+  label: string;
   targetLabel: string;
+  actorName: string;
   note?: string;
   createdAt: string;
 };
@@ -58,14 +62,43 @@ export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   other: "Other",
 };
 
-export const MODERATION_ACTION_LABELS: Record<ModerationActionType, string> = {
-  post_hidden: "Post hidden",
-  post_unhidden: "Post restored",
-  user_suspended: "User suspended",
-  user_reinstated: "User reinstated",
-  report_dismissed: "Report dismissed",
-  report_actioned: "Report actioned",
-  place_verified: "Place marked verified",
-  place_unverified: "Place verification removed",
-  event_cancelled: "Event cancelled",
+/** Actions offered per kind of reported thing. */
+export const DECISIONS_BY_TARGET: Record<ReportTargetType, { value: ModerationDecision; label: string }[]> = {
+  post: [
+    { value: "HIDE", label: "Hide" },
+    { value: "DELETE", label: "Delete" },
+    { value: "WARNING", label: "Warn author" },
+  ],
+  comment: [
+    { value: "HIDE", label: "Hide" },
+    { value: "DELETE", label: "Delete" },
+    { value: "WARNING", label: "Warn author" },
+  ],
+  user: [
+    { value: "WARNING", label: "Warn" },
+    { value: "RESTRICT", label: "Restrict" },
+    { value: "SUSPEND", label: "Suspend" },
+  ],
+  event: [
+    { value: "HIDE", label: "Reject event" },
+    { value: "DELETE", label: "Cancel event" },
+    { value: "WARNING", label: "Warn organizer" },
+  ],
+  group: [
+    { value: "DELETE", label: "Delete group" },
+    { value: "WARNING", label: "Warn owner" },
+  ],
+  place: [
+    { value: "HIDE", label: "Remove place" },
+    { value: "WARNING", label: "Warn" },
+  ],
+  message: [
+    { value: "DELETE", label: "Delete message" },
+    { value: "WARNING", label: "Warn sender" },
+  ],
+  review: [
+    { value: "HIDE", label: "Hide" },
+    { value: "DELETE", label: "Delete" },
+    { value: "WARNING", label: "Warn author" },
+  ],
 };

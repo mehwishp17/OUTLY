@@ -1,196 +1,196 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { MOCK_EVENTS } from "@/lib/mock/mock-events";
 import { useSocialStore } from "@/context/social-store-context";
+import {
+  cancelEventRequest,
+  createEventRequest,
+  decideParticipantRequest,
+  deleteEventRequest,
+  editEventRequest,
+  fetchEvent,
+  fetchEvents,
+  joinEventRequest,
+  leaveEventRequest,
+} from "@/lib/api/events";
 import type { EventFormValues, OutlyEvent } from "@/types/event";
 
 export type JoinEventResult = "joined" | "requested" | "full";
 
+type LoadStatus = "idle" | "loading" | "ready" | "error";
+type LoadError = { message: string; status: number };
+
 type EventStoreValue = {
   events: OutlyEvent[];
+  status: LoadStatus;
+  error: LoadError | null;
+  /** (Re)loads upcoming and past events from the backend. */
+  refresh: () => Promise<void>;
+  /** Loads one event with its participants (for detail/edit/participants screens). */
+  loadEvent: (eventId: string) => Promise<LoadError | null>;
   getEventById: (eventId: string) => OutlyEvent | undefined;
-  createEvent: (input: EventFormValues) => OutlyEvent;
-  editEvent: (eventId: string, input: EventFormValues) => void;
-  deleteEvent: (eventId: string) => void;
-  cancelEvent: (eventId: string) => void;
-  joinEvent: (eventId: string) => JoinEventResult;
-  leaveEvent: (eventId: string) => void;
-  approveParticipant: (eventId: string, userId: string) => void;
-  rejectParticipant: (eventId: string, userId: string) => void;
+  /** Every mutation resolves with an error message on failure. */
+  createEvent: (input: EventFormValues) => Promise<{ event?: OutlyEvent; error?: string }>;
+  editEvent: (eventId: string, input: EventFormValues) => Promise<string | undefined>;
+  deleteEvent: (eventId: string) => Promise<string | undefined>;
+  cancelEvent: (eventId: string) => Promise<string | undefined>;
+  /** The backend checks capacity inside a transaction, so "full" is authoritative. */
+  joinEvent: (eventId: string) => Promise<{ result?: JoinEventResult; error?: string }>;
+  leaveEvent: (eventId: string) => Promise<string | undefined>;
+  approveParticipant: (eventId: string, userId: string) => Promise<string | undefined>;
+  rejectParticipant: (eventId: string, userId: string) => Promise<string | undefined>;
 };
 
 const EventStoreContext = createContext<EventStoreValue | null>(null);
 
-let localEventIdCounter = 0;
-
-function nextEventId(): string {
-  localEventIdCounter += 1;
-  return `event-local-${Date.now()}-${localEventIdCounter}`;
-}
-
-/** Number of participants counted against capacity — both confirmed
- * ("going") and awaiting approval ("pending") reserve a slot, matching
- * the Event Capacity Rule: capacity is checked at join time, in the same
- * step the participant record is created. */
-function reservedSlots(event: OutlyEvent): number {
-  return event.participants.filter((p) => p.status === "going" || p.status === "pending").length;
-}
-
 /**
- * Session-only mock "backend" for the Events module (Events List, Event
- * Detail, Create/Edit Event, Participants, Organizer View). Reads the
- * current user from `SocialStoreProvider` so events and profile data
- * always agree on who "you" are. Nothing here persists beyond the
- * current browser session.
+ * Events module state (Events List, Event Detail, Create/Edit Event,
+ * Participants), backed by the OUTLY backend (`lib/api/events.ts`). The
+ * backend owns the Event Capacity Rule: joining is checked and recorded in
+ * one transaction, so two people can never take the last spot.
  */
 export function EventStoreProvider({ children }: { children: ReactNode }) {
-  const { currentUser } = useSocialStore();
-  const [events, setEvents] = useState<OutlyEvent[]>(MOCK_EVENTS);
+  const { refreshProfileExtras } = useSocialStore();
+  const [events, setEvents] = useState<OutlyEvent[]>([]);
+  const eventsRef = useRef<OutlyEvent[]>([]);
+  const [status, setStatus] = useState<LoadStatus>("idle");
+  const [error, setError] = useState<LoadError | null>(null);
+  const inflight = useRef<Promise<void> | null>(null);
 
-  const getEventById = useCallback(
-    (eventId: string) => events.find((event) => event.id === eventId),
-    [events],
+  const setList = useCallback((updater: (current: OutlyEvent[]) => OutlyEvent[]) => {
+    const next = updater(eventsRef.current);
+    eventsRef.current = next;
+    setEvents(next);
+  }, []);
+
+  const refresh = useCallback((): Promise<void> => {
+    if (inflight.current) return inflight.current;
+    inflight.current = (async () => {
+      setStatus((current) => (current === "ready" ? current : "loading"));
+      const result = await fetchEvents();
+      if (result.ok) {
+        setError(null);
+        setList((current) => {
+          const known = new Map(current.map((event) => [event.id, event]));
+          const merged = result.data.map((event) => {
+            const before = known.get(event.id);
+            return before && before.participants.length > 0 ? { ...event, participants: before.participants } : event;
+          });
+          const fresh = new Set(result.data.map((event) => event.id));
+          return [...merged, ...current.filter((event) => !fresh.has(event.id))];
+        });
+        setStatus("ready");
+      } else {
+        setError({ message: result.message, status: result.status });
+        setStatus("error");
+      }
+    })().finally(() => {
+      inflight.current = null;
+    });
+    return inflight.current;
+  }, [setList]);
+
+  const loadEvent = useCallback(
+    async (eventId: string): Promise<LoadError | null> => {
+      const result = await fetchEvent(eventId);
+      if (!result.ok) return { message: result.message, status: result.status };
+      setList((current) =>
+        current.some((event) => event.id === eventId)
+          ? current.map((event) => (event.id === eventId ? result.data : event))
+          : [result.data, ...current],
+      );
+      return null;
+    },
+    [setList],
   );
+
+  const getEventById = useCallback((eventId: string) => events.find((event) => event.id === eventId), [events]);
 
   const createEvent = useCallback(
-    (input: EventFormValues) => {
-      const newEvent: OutlyEvent = {
-        id: nextEventId(),
-        organizerId: currentUser.id,
-        organizerName: currentUser.name,
-        title: input.title.trim(),
-        description: input.description.trim(),
-        category: input.category,
-        placeId: input.placeId,
-        location: input.location.trim(),
-        meetingPoint: input.meetingPoint?.trim() || undefined,
-        startAt: input.startAt,
-        capacity: input.capacity,
-        difficulty: input.difficulty,
-        requiresApproval: input.requiresApproval,
-        visibility: input.visibility,
-        status: "upcoming",
-        participants: [{ id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl, status: "going" }],
-      };
-      setEvents((current) => [newEvent, ...current]);
-      return newEvent;
+    async (input: EventFormValues) => {
+      const result = await createEventRequest(input);
+      if (!result.ok) return { error: result.message };
+      setList((current) => [result.data, ...current.filter((event) => event.id !== result.data.id)]);
+      return { event: result.data };
     },
-    [currentUser],
+    [setList],
   );
 
-  const editEvent = useCallback((eventId: string, input: EventFormValues) => {
-    setEvents((current) =>
-      current.map((event) =>
-        event.id === eventId
-          ? {
-              ...event,
-              title: input.title.trim(),
-              description: input.description.trim(),
-              category: input.category,
-              placeId: input.placeId,
-              location: input.location.trim(),
-              meetingPoint: input.meetingPoint?.trim() || undefined,
-              startAt: input.startAt,
-              capacity: input.capacity,
-              difficulty: input.difficulty,
-              requiresApproval: input.requiresApproval,
-              visibility: input.visibility,
-            }
-          : event,
-      ),
-    );
-  }, []);
+  const editEvent = useCallback(
+    async (eventId: string, input: EventFormValues) => {
+      const result = await editEventRequest(eventId, input);
+      if (!result.ok) return result.message;
+      await loadEvent(eventId);
+      return undefined;
+    },
+    [loadEvent],
+  );
 
-  const deleteEvent = useCallback((eventId: string) => {
-    setEvents((current) => current.filter((event) => event.id !== eventId));
-  }, []);
+  const cancelEvent = useCallback(
+    async (eventId: string) => {
+      const result = await cancelEventRequest(eventId);
+      if (!result.ok) return result.message;
+      await loadEvent(eventId);
+      return undefined;
+    },
+    [loadEvent],
+  );
 
-  const cancelEvent = useCallback((eventId: string) => {
-    setEvents((current) =>
-      current.map((event) => (event.id === eventId ? { ...event, status: "cancelled" } : event)),
-    );
-  }, []);
+  const deleteEvent = useCallback(
+    async (eventId: string) => {
+      const result = await deleteEventRequest(eventId);
+      if (!result.ok) return result.message;
+      setList((current) => current.filter((event) => event.id !== eventId));
+      return undefined;
+    },
+    [setList],
+  );
 
   const joinEvent = useCallback(
-    (eventId: string): JoinEventResult => {
-      const event = events.find((candidate) => candidate.id === eventId);
-      if (!event) return "full";
-      if (reservedSlots(event) >= event.capacity) return "full";
-
-      const outcome: JoinEventResult = event.requiresApproval ? "requested" : "joined";
-
-      setEvents((current) =>
-        current.map((candidate) => {
-          if (candidate.id !== eventId) return candidate;
-          if (candidate.participants.some((p) => p.id === currentUser.id)) return candidate;
-          return {
-            ...candidate,
-            participants: [
-              ...candidate.participants,
-              {
-                id: currentUser.id,
-                name: currentUser.name,
-                avatarUrl: currentUser.avatarUrl,
-                status: candidate.requiresApproval ? "pending" : "going",
-              },
-            ],
-          };
-        }),
-      );
-
-      return outcome;
+    async (eventId: string) => {
+      const result = await joinEventRequest(eventId);
+      if (!result.ok) {
+        // 409 means the last spot went to someone else.
+        return result.status === 409 ? { result: "full" as JoinEventResult } : { error: result.message };
+      }
+      await loadEvent(eventId);
+      void refreshProfileExtras();
+      return { result: (result.data.status === "PENDING" ? "requested" : "joined") as JoinEventResult };
     },
-    [events, currentUser],
+    [loadEvent, refreshProfileExtras],
   );
 
   const leaveEvent = useCallback(
-    (eventId: string) => {
-      setEvents((current) =>
-        current.map((event) =>
-          event.id === eventId
-            ? { ...event, participants: event.participants.filter((p) => p.id !== currentUser.id) }
-            : event,
-        ),
-      );
+    async (eventId: string) => {
+      const result = await leaveEventRequest(eventId);
+      if (!result.ok) return result.message;
+      await loadEvent(eventId);
+      return undefined;
     },
-    [currentUser],
+    [loadEvent],
   );
 
-  const approveParticipant = useCallback((eventId: string, userId: string) => {
-    setEvents((current) =>
-      current.map((event) =>
-        event.id === eventId
-          ? {
-              ...event,
-              participants: event.participants.map((p) =>
-                p.id === userId ? { ...p, status: "going" } : p,
-              ),
-            }
-          : event,
-      ),
-    );
-  }, []);
+  const decide = useCallback(
+    async (eventId: string, userId: string, approve: boolean) => {
+      const result = await decideParticipantRequest(eventId, userId, approve);
+      if (!result.ok) return result.status === 409 ? "This event is full." : result.message;
+      await loadEvent(eventId);
+      return undefined;
+    },
+    [loadEvent],
+  );
 
-  const rejectParticipant = useCallback((eventId: string, userId: string) => {
-    setEvents((current) =>
-      current.map((event) =>
-        event.id === eventId
-          ? {
-              ...event,
-              participants: event.participants.map((p) =>
-                p.id === userId ? { ...p, status: "declined" } : p,
-              ),
-            }
-          : event,
-      ),
-    );
-  }, []);
+  const approveParticipant = useCallback((eventId: string, userId: string) => decide(eventId, userId, true), [decide]);
+  const rejectParticipant = useCallback((eventId: string, userId: string) => decide(eventId, userId, false), [decide]);
 
   const value = useMemo<EventStoreValue>(
     () => ({
       events,
+      status,
+      error,
+      refresh,
+      loadEvent,
       getEventById,
       createEvent,
       editEvent,
@@ -201,18 +201,7 @@ export function EventStoreProvider({ children }: { children: ReactNode }) {
       approveParticipant,
       rejectParticipant,
     }),
-    [
-      events,
-      getEventById,
-      createEvent,
-      editEvent,
-      deleteEvent,
-      cancelEvent,
-      joinEvent,
-      leaveEvent,
-      approveParticipant,
-      rejectParticipant,
-    ],
+    [events, status, error, refresh, loadEvent, getEventById, createEvent, editEvent, deleteEvent, cancelEvent, joinEvent, leaveEvent, approveParticipant, rejectParticipant],
   );
 
   return <EventStoreContext.Provider value={value}>{children}</EventStoreContext.Provider>;

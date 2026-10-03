@@ -4,11 +4,11 @@ import { VerifyEmailPanel } from "@/components/auth/verify-email-panel";
 
 export const metadata: Metadata = {
   title: "Verify your email — OUTLY",
-  description: "Frontend-only email verification preview for your OUTLY account.",
+  description: "Confirm the email address of your OUTLY account.",
 };
 
 type VerifyEmailPageProps = {
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; token?: string }>;
 };
 
 export default async function VerifyEmailPage({ searchParams }: VerifyEmailPageProps) {
@@ -17,7 +17,7 @@ export default async function VerifyEmailPage({ searchParams }: VerifyEmailPageP
 
   return (
     <AuthShell>
-      <VerifyEmailPanel email={email} />
+      <VerifyEmailPanel email={email} token={params.token?.trim() || undefined} />
     </AuthShell>
   );
 }

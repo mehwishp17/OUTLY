@@ -12,7 +12,7 @@ from apps.posts.models import Post
 
 from . import serializers as s
 from .models import AuditLog, ModerationAction, Report
-from .services import AuditService, ReportService, _resolve, target_preview
+from .services import AuditService, ReportService, _resolve, target_labels, target_preview
 
 User = get_user_model()
 
@@ -60,6 +60,11 @@ class ReportQueueView(generics.ListAPIView):
             if params.get(param):
                 queryset = queryset.filter(**{param: params[param].upper()})
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        page = self.paginate_queryset(self.get_queryset())
+        serializer = self.get_serializer(page, many=True, context={**self.get_serializer_context(), "labels": target_labels(page)})
+        return self.get_paginated_response(serializer.data)
 
 
 class ReportDetailView(APIView):

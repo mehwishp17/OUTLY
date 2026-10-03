@@ -17,10 +17,9 @@ import { cn } from "@/lib/utils";
 import type { EditProfileErrors, EditProfileValues, SkillLevel } from "@/types/profile";
 
 /**
- * Edit-profile form. Pre-filled from the shared mock profile in
- * `social-store-context`; "Save changes" simulates a short delay, then
- * writes the new values back into context (so /profile reflects them
- * immediately) and redirects there. Nothing is sent to a server.
+ * Edit-profile form. Pre-filled from the signed-in profile in
+ * `social-store-context`; "Save changes" saves the details (and a new
+ * avatar, if one was chosen) to the backend, then redirects to /profile.
  */
 function EditProfileFormFields() {
   const router = useRouter();
@@ -35,6 +34,7 @@ function EditProfileFormFields() {
     skillLevel: currentUser.skillLevel,
   });
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl);
+  const [avatarFile, setAvatarFile] = useState<File>();
   const [errors, setErrors] = useState<EditProfileErrors>({});
   const [status, setStatus] = useState<"idle" | "saving" | "success">("idle");
   const [saveError, setSaveError] = useState<string>();
@@ -66,14 +66,26 @@ function EditProfileFormFields() {
       setStatus("idle");
       return;
     }
-    updateAvatar(avatarUrl);
+    const avatarError = await updateAvatar(avatarUrl, avatarFile);
+    if (avatarError) {
+      setSaveError(avatarError);
+      setStatus("idle");
+      return;
+    }
     setStatus("success");
     router.push("/profile");
   }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
-      <AvatarUpload name={values.name || currentUser.name} avatarUrl={avatarUrl} onChange={setAvatarUrl} />
+      <AvatarUpload
+        name={values.name || currentUser.name}
+        avatarUrl={avatarUrl}
+        onChange={(url, file) => {
+          setAvatarUrl(url);
+          setAvatarFile(file);
+        }}
+      />
 
       {status === "success" ? <Alert variant="success" title="Profile updated" /> : null}
       {saveError ? <Alert variant="error" title="Couldn't save your profile">{saveError}</Alert> : null}

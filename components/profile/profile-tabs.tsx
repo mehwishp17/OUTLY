@@ -11,6 +11,8 @@ type ProfileTabsProps = {
   showActivityHistory: boolean;
   showSavedPlaces: boolean;
   onRemoveSavedPlace: (placeId: string) => void;
+  /** Tab to open first (`activity`, `saved` or `about`), e.g. from a profile stat link. */
+  initialTab?: string;
 };
 
 /** Groups the profile's Activity history / Saved places / About sections
@@ -24,9 +26,12 @@ export function ProfileTabs({
   showActivityHistory,
   showSavedPlaces,
   onRemoveSavedPlace,
+  initialTab,
 }: ProfileTabsProps) {
   return (
     <Tabs
+      key={initialTab}
+      defaultTabId={initialTab}
       ariaLabel="Profile sections"
       items={[
         {

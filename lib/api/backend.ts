@@ -95,29 +95,32 @@ async function refreshSession(): Promise<string | undefined> {
   return access;
 }
 
-export type ProxiedResponse = { status: number; body: string | null };
+export type ProxiedResponse = { status: number; body: string | null; contentType?: string };
 
 /** Calls an authenticated backend endpoint with the session's access token,
  * renewing it once (before the call if the cookie has expired, or after a
- * 401) using the refresh token. */
+ * 401) using the refresh token. `body` is JSON text by default; pass raw
+ * bytes plus their `contentType` (e.g. multipart image uploads). */
 export async function authedBackendFetch(
   method: string,
   path: string,
-  body?: string,
+  body?: string | ArrayBuffer,
+  contentType?: string,
 ): Promise<ProxiedResponse> {
   let access = (await cookies()).get(ACCESS_COOKIE)?.value ?? (await refreshSession());
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     if (!access) return { status: 401, body: null };
     try {
+      const hasBody = body !== undefined && (typeof body !== "string" || body.length > 0);
       const response = await fetch(`${BACKEND_URL}${path}`, {
         method,
         headers: {
           Authorization: `Bearer ${access}`,
           Accept: "application/json",
-          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(hasBody ? { "Content-Type": contentType ?? "application/json" } : {}),
         },
-        body,
+        body: hasBody ? body : undefined,
         cache: "no-store",
         signal: AbortSignal.timeout(60_000),
       });
@@ -125,7 +128,11 @@ export async function authedBackendFetch(
         access = await refreshSession();
         continue;
       }
-      return { status: response.status, body: response.status === 204 ? null : await response.text() };
+      return {
+        status: response.status,
+        body: response.status === 204 ? null : await response.text(),
+        contentType: response.headers.get("content-type") ?? undefined,
+      };
     } catch {
       return { status: 503, body: null };
     }

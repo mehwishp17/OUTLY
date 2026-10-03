@@ -12,7 +12,7 @@ export default function OnboardingPage() {
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <header className="border-b border-[var(--outly-border)] bg-white/70 py-4 backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl items-center px-4 sm:px-6">
-          <OutlyLogo width={36} height={36} priority />
+          <OutlyLogo width={44} height={44} priority variant="transparent" quality={100} />
         </div>
       </header>
       <OnboardingFlow />

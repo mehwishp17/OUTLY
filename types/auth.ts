@@ -1,7 +1,7 @@
 /**
- * Shared types for the frontend-only OUTLY authentication UI (Phase 2).
- * These describe form shapes and mock results only — there is no real
- * backend, session, or persisted user yet.
+ * Shared types for the OUTLY authentication UI: form shapes and statuses.
+ * Sign-up, login, password reset and email verification are performed by
+ * the backend through `lib/api/auth.ts`.
  */
 
 export type LoginFormValues = {
@@ -36,24 +36,8 @@ export type ResetPasswordValues = {
 export type ResetPasswordErrors = Partial<Record<keyof ResetPasswordValues, string>>;
 
 /**
- * Result shape returned by every function in `lib/mock/mock-auth.ts`.
- * `field` optionally identifies which form field a failure relates to,
- * so the calling form can attach the message to the right input.
- */
-export type MockAuthResult =
-  | {
-      success: true;
-      message: string;
-    }
-  | {
-      success: false;
-      message: string;
-      field?: string;
-    };
-
-/**
  * Generic async form status used by every auth form. "idle" is the
- * resting state before submission; "loading" simulates a pending mock
- * request; "success" / "error" reflect the mock result.
+ * resting state before submission; "loading" is a request in flight;
+ * "success" / "error" reflect the backend's answer.
  */
 export type AuthStatus = "idle" | "loading" | "success" | "error";

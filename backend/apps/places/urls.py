@@ -9,6 +9,8 @@ urlpatterns = [
     path("trails/", views.TrailListCreateView.as_view()),
     path("trails/<int:trail_id>/", views.TrailDetailView.as_view()),
     path("trails/<int:trail_id>/points/", views.TrailPointsView.as_view()),
+    path("trails/<int:trail_id>/save/", views.TrailSaveView.as_view()),
     path("users/me/saved-places/", views.SavedPlacesView.as_view()),
+    path("users/me/saved-trails/", views.SavedTrailsView.as_view()),
     path("map/", views.MapView.as_view()),
 ]

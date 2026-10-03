@@ -15,7 +15,7 @@ export function BadgeCard({ progress }: BadgeCardProps) {
     <div
       className={cn(
         "flex flex-col gap-3 rounded-[var(--radius-lg)] border bg-white p-5 shadow-[var(--shadow-soft)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] motion-reduce:transition-none motion-reduce:hover:translate-y-0",
-        earned ? "border-[var(--outly-violet)]/40" : "border-[var(--outly-border)]",
+        earned ? "border-[var(--outly-violet)]/40" : "border-[var(--outly-border)] bg-white/70",
       )}
     >
       <div className="flex items-center gap-3">
@@ -29,7 +29,7 @@ export function BadgeCard({ progress }: BadgeCardProps) {
           <Icon name={earned ? badge.icon : "lock"} className="h-5.5 w-5.5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[var(--outly-ink)]">{badge.title}</p>
+          <p className={cn("text-sm font-semibold", earned ? "text-[var(--outly-ink)]" : "text-[var(--outly-ink)]/80")}>{badge.title}</p>
           <p className="text-xs text-[var(--outly-muted)]">{badge.description}</p>
         </div>
         {earned ? (
@@ -45,8 +45,11 @@ export function BadgeCard({ progress }: BadgeCardProps) {
           max={badge.target}
           label={`${displayValue} of ${badge.target} for ${badge.title}`}
         />
-        <p className="mt-1.5 text-xs text-[var(--outly-muted)]">
-          {displayValue}/{badge.target}
+        <p className="mt-1.5 flex justify-between text-xs text-[var(--outly-muted)]">
+          <span>
+            {displayValue}/{badge.target}
+          </span>
+          <span>{earned ? "Complete" : `${badge.target - displayValue} to go`}</span>
         </p>
       </div>
     </div>

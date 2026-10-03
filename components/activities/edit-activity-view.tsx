@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActivityComposer } from "@/components/activities/activity-composer";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useActivityStore } from "@/context/activity-store-context";
 import { useSocialStore } from "@/context/social-store-context";
 
@@ -14,8 +16,21 @@ type EditActivityViewProps = {
 export function EditActivityView({ activityId }: EditActivityViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getActivityById, editActivity } = useActivityStore();
+  const { getActivityById, editActivity, loadActivity } = useActivityStore();
   const activity = getActivityById(activityId);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadActivity(activityId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activityId, loadActivity]);
+
+  if (!activity && loading) return <LoadingState message="Loading activity…" />;
 
   if (!activity || activity.creatorId !== currentUser.id) {
     return (
@@ -46,9 +61,11 @@ export function EditActivityView({ activityId }: EditActivityViewProps) {
         submitLabel="Save changes"
         initialValues={activity}
         onCancel={() => router.push(`/activities/${activity.id}`)}
-        onSubmit={(values) => {
-          editActivity(activity.id, values);
+        onSubmit={async (values) => {
+          const error = await editActivity(activity.id, values);
+          if (error) return error;
           router.push(`/activities/${activity.id}`);
+          return undefined;
         }}
       />
     </div>

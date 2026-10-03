@@ -1,12 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { StatTile } from "@/components/admin/stat-tile";
 import { ProgressBar } from "@/components/ui/progress-bar";
-import { useActivityStore } from "@/context/activity-store-context";
-import { useAdminStore } from "@/context/admin-store-context";
-import { useEventStore } from "@/context/event-store-context";
-import { useSocialStore } from "@/context/social-store-context";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { fetchOverview } from "@/lib/api/admin";
+import type { Overview } from "@/lib/api/admin";
 import { ACTIVITY_TYPE_LABELS } from "@/types/activity";
 import type { ActivityKind } from "@/types/activity";
 
@@ -41,36 +42,46 @@ function BreakdownList({ title, rows }: { title: string; rows: BreakdownRow[] })
   );
 }
 
-/** Admin Analytics: simple breakdowns computed from the same real store
- * data used across the app — no separate fabricated analytics dataset,
- * and no chart form is forced where a stat tile or a plain breakdown
- * list already answers the question clearly. */
+/** Admin Analytics: breakdowns computed by the backend over its real data
+ * (cached for a minute); no chart form is forced where a stat tile or a
+ * plain breakdown list already answers the question clearly. */
 export function AdminAnalyticsView() {
-  const { posts } = useSocialStore();
-  const { activities } = useActivityStore();
-  const { events } = useEventStore();
-  const { reports } = useAdminStore();
+  const [overview, setOverview] = useState<Overview>();
+  const [error, setError] = useState<string>();
 
-  const groupPosts = posts.filter((post) => post.groupId).length;
-  const feedPosts = posts.length - groupPosts;
-  const hiddenPosts = posts.filter((post) => post.hidden).length;
+  useEffect(() => {
+    let cancelled = false;
+    void fetchOverview().then((result) => {
+      if (cancelled) return;
+      if (result.ok) setOverview(result.data);
+      else setError(result.message);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const activityTypeRows: BreakdownRow[] = (Object.keys(ACTIVITY_TYPE_LABELS) as ActivityKind[]).map(
-    (type) => ({
-      label: ACTIVITY_TYPE_LABELS[type],
-      count: activities.filter((activity) => activity.type === type).length,
-    }),
-  );
+  const groupPosts = overview?.posts.group_posts ?? 0;
+  const feedPosts = (overview?.posts.total ?? 0) - groupPosts;
+  const hiddenPosts = overview?.posts.hidden ?? 0;
 
-  const eventStatusRows: BreakdownRow[] = ["upcoming", "completed", "cancelled"].map((status) => ({
-    label: status.charAt(0).toUpperCase() + status.slice(1),
-    count: events.filter((event) => event.status === status).length,
+  const activityTypeRows: BreakdownRow[] = (Object.keys(ACTIVITY_TYPE_LABELS) as ActivityKind[]).map((type) => ({
+    label: ACTIVITY_TYPE_LABELS[type],
+    count: overview?.activities.by_type[type.toUpperCase().replace("-", "_")] ?? 0,
   }));
 
-  const reportStatusRows: BreakdownRow[] = ["open", "actioned", "dismissed"].map((status) => ({
-    label: status.charAt(0).toUpperCase() + status.slice(1),
-    count: reports.filter((report) => report.status === status).length,
-  }));
+  const eventStatusRows: BreakdownRow[] = [
+    { label: "Upcoming", count: overview?.events.upcoming ?? 0 },
+    { label: "Completed", count: overview?.events.completed ?? 0 },
+    { label: "Cancelled", count: overview?.events.cancelled ?? 0 },
+  ];
+
+  const byStatus = overview?.moderation.reports_by_status ?? {};
+  const reportStatusRows: BreakdownRow[] = [
+    { label: "Open", count: (byStatus.OPEN ?? 0) + (byStatus.IN_REVIEW ?? 0) },
+    { label: "Actioned", count: byStatus.RESOLVED ?? 0 },
+    { label: "Dismissed", count: byStatus.DISMISSED ?? 0 },
+  ];
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -85,17 +96,25 @@ export function AdminAnalyticsView() {
 
       <AdminNav active="/admin/analytics" />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatTile label="Home Feed posts" value={feedPosts} icon="message-circle" />
-        <StatTile label="Group posts" value={groupPosts} icon="tent" />
-        <StatTile label="Hidden posts" value={hiddenPosts} icon="shield-check" />
-      </div>
+      {error ? (
+        <ErrorState title="We couldn't load analytics" description={error} />
+      ) : !overview ? (
+        <LoadingState message="Loading analytics…" />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatTile label="Home Feed posts" value={feedPosts} icon="message-circle" />
+            <StatTile label="Group posts" value={groupPosts} icon="tent" />
+            <StatTile label="Hidden posts" value={hiddenPosts} icon="shield-check" />
+          </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <BreakdownList title="Activities by type" rows={activityTypeRows} />
-        <BreakdownList title="Events by status" rows={eventStatusRows} />
-        <BreakdownList title="Reports by status" rows={reportStatusRows} />
-      </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <BreakdownList title="Activities by type" rows={activityTypeRows} />
+            <BreakdownList title="Events by status" rows={eventStatusRows} />
+            <BreakdownList title="Reports by status" rows={reportStatusRows} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { usePartnerStore } from "@/context/partner-store-context";
 import { useSocialStore } from "@/context/social-store-context";
+import { displayPerson } from "@/lib/user-directory";
 import type { JoinRequest } from "@/types/partner";
 
 type PartnerJoinRequestsViewProps = {
@@ -23,11 +26,13 @@ function JoinRequestRow({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  const { currentUser } = useSocialStore();
+  const person = displayPerson({ id: join.userId, name: join.name, avatarUrl: join.avatarUrl }, currentUser);
   return (
     <li className="rounded-[var(--radius-md)] border border-[var(--outly-border)] bg-white p-4">
       <div className="flex items-center gap-3">
-        <Avatar name={join.name} avatarUrl={join.avatarUrl} size="sm" />
-        <span className="flex-1 text-sm font-semibold text-[var(--outly-ink)]">{join.name}</span>
+        <Avatar name={person.name} avatarUrl={person.avatarUrl} size="sm" />
+        <span className="flex-1 text-sm font-semibold text-[var(--outly-ink)]">{person.name}</span>
         {join.status === "pending" && isAuthor ? (
           <div className="flex gap-2">
             <Button size="md" onClick={onAccept}>
@@ -62,8 +67,28 @@ function JoinRequestRow({
  * join a partner request, with accept/decline controls. */
 export function PartnerJoinRequestsView({ requestId }: PartnerJoinRequestsViewProps) {
   const { currentUser } = useSocialStore();
-  const { getRequestById, acceptJoinRequest, declineJoinRequest } = usePartnerStore();
+  const { getRequestById, acceptJoinRequest, declineJoinRequest, loadRequest } = usePartnerStore();
   const request = getRequestById(requestId);
+  const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadRequest(requestId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId, loadRequest]);
+
+  async function decide(action: Promise<string | undefined>) {
+    setActionError(undefined);
+    const error = await action;
+    if (error) setActionError(error);
+  }
+
+  if (!request && loading) return <LoadingState message="Loading join requests…" />;
 
   if (!request) {
     return (
@@ -100,6 +125,12 @@ export function PartnerJoinRequestsView({ requestId }: PartnerJoinRequestsViewPr
         <p className="mt-1 text-sm text-[var(--outly-muted)]">{request.destination}</p>
       </div>
 
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
       {request.joinRequests.length === 0 ? (
         <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-10 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
           No one has requested to join yet.
@@ -117,8 +148,8 @@ export function PartnerJoinRequestsView({ requestId }: PartnerJoinRequestsViewPr
                     key={join.id}
                     join={join}
                     isAuthor={isAuthor}
-                    onAccept={() => acceptJoinRequest(request.id, join.id)}
-                    onDecline={() => declineJoinRequest(request.id, join.id)}
+                    onAccept={() => decide(acceptJoinRequest(request.id, join.id))}
+                    onDecline={() => decide(declineJoinRequest(request.id, join.id))}
                   />
                 ))}
               </ul>
@@ -136,8 +167,8 @@ export function PartnerJoinRequestsView({ requestId }: PartnerJoinRequestsViewPr
                     key={join.id}
                     join={join}
                     isAuthor={isAuthor}
-                    onAccept={() => acceptJoinRequest(request.id, join.id)}
-                    onDecline={() => declineJoinRequest(request.id, join.id)}
+                    onAccept={() => decide(acceptJoinRequest(request.id, join.id))}
+                    onDecline={() => decide(declineJoinRequest(request.id, join.id))}
                   />
                 ))}
               </ul>
@@ -155,8 +186,8 @@ export function PartnerJoinRequestsView({ requestId }: PartnerJoinRequestsViewPr
                     key={join.id}
                     join={join}
                     isAuthor={isAuthor}
-                    onAccept={() => acceptJoinRequest(request.id, join.id)}
-                    onDecline={() => declineJoinRequest(request.id, join.id)}
+                    onAccept={() => decide(acceptJoinRequest(request.id, join.id))}
+                    onDecline={() => decide(declineJoinRequest(request.id, join.id))}
                   />
                 ))}
               </ul>

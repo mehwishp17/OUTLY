@@ -1,14 +1,20 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
 import { StarRating } from "@/components/explore/star-rating";
 import { TrailRoutePreview } from "@/components/explore/trail-route-preview";
 import { SaveButton } from "@/components/social/save-button";
+import { CoverImage } from "@/components/ui/cover-image";
 import { Icon } from "@/components/ui/icon";
 import { useSocialStore } from "@/context/social-store-context";
-import { getExplorePlaceById } from "@/lib/mock/mock-places";
-import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS } from "@/types/place";
+import { LoadingState } from "@/components/ui/loading-state";
+import { ReviewSection } from "@/components/reviews/review-section";
+import { fetchExploreItem } from "@/lib/api/places";
+import { PHOTO_POSITIONS } from "@/lib/adventure-images";
+import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS, exploreKey, exploreMeta } from "@/types/place";
+import type { ExplorePlace } from "@/types/place";
 
 type ExplorePlaceDetailViewProps = {
   placeId: string;
@@ -20,10 +26,29 @@ type ExplorePlaceDetailViewProps = {
 
 export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDetailViewProps) {
   const { isPlaceSaved, toggleSavePlace } = useSocialStore();
-  const place = getExplorePlaceById(placeId);
+  const [place, setPlace] = useState<ExplorePlace>();
+  const [status, setStatus] = useState<"loading" | "ready" | "missing">("loading");
   const noun = expectedKind === "trail" ? "trail" : "place";
 
-  if (!place || place.kind !== expectedKind) {
+  useEffect(() => {
+    let cancelled = false;
+    void fetchExploreItem(expectedKind, placeId).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setPlace(result.data);
+        setStatus("ready");
+      } else {
+        setStatus("missing");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [expectedKind, placeId]);
+
+  if (status === "loading") return <LoadingState message={`Loading this ${noun}…`} />;
+
+  if (!place || status === "missing") {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-4 py-16 text-center sm:px-6">
         <h1 className="text-xl font-bold text-[var(--outly-ink)]">
@@ -43,7 +68,8 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
     );
   }
 
-  const saved = isPlaceSaved(place.id);
+  const saved = isPlaceSaved(exploreKey(place));
+  const photo = place.photo;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -57,22 +83,26 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
 
       <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white shadow-[var(--shadow-soft)]">
         <div
-          className="relative flex h-48 items-end overflow-hidden p-6 sm:h-64"
+          className="group relative flex h-56 items-end overflow-hidden p-6 sm:h-80"
           style={{ backgroundImage: place.gradient }}
           role="img"
           aria-label={`${place.name} — illustrative terrain visual`}
         >
-          <svg
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full opacity-70"
-            viewBox="0 0 200 60"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M0 60 20 30 40 50 60 15 85 45 110 20 140 48 165 25 200 40 200 60Z"
-              fill="rgba(255,255,255,0.16)"
-            />
-          </svg>
+          {photo ? (
+            <CoverImage src={photo} position={PHOTO_POSITIONS[photo]} sizes="(min-width: 768px) 768px, 100vw" />
+          ) : (
+            <svg
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full opacity-70"
+              viewBox="0 0 200 60"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M0 60 20 30 40 50 60 15 85 45 110 20 140 48 165 25 200 40 200 60Z"
+                fill="rgba(255,255,255,0.16)"
+              />
+            </svg>
+          )}
           <span className="relative flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
             <Icon name={PLACE_CATEGORY_ICONS[place.category]} className="h-3.5 w-3.5" />
             {PLACE_CATEGORY_LABELS[place.category]}
@@ -96,16 +126,14 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
                 {place.location}
               </p>
             </div>
-            <SaveButton saved={saved} onToggle={() => toggleSavePlace(toSavedPlace(place))} />
+            <SaveButton saved={saved} onToggle={() => toggleSavePlace(place)} />
           </div>
 
           <StarRating rating={place.rating} reviewCount={place.reviewCount} />
 
           <div className="flex flex-wrap items-center gap-3">
-            <DifficultyBadge difficulty={place.difficulty} />
-            <span className="text-sm text-[var(--outly-muted)]">
-              {place.distanceKm} km · {place.durationLabel}
-            </span>
+            {place.difficulty ? <DifficultyBadge difficulty={place.difficulty} /> : null}
+            <span className="text-sm text-[var(--outly-muted)]">{exploreMeta(place)}</span>
           </div>
 
           <p className="text-sm leading-relaxed text-[var(--outly-ink)]">{place.description}</p>
@@ -119,6 +147,7 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
             </div>
           ) : null}
 
+          {place.facilities.length > 0 ? (
           <div>
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
               Facilities
@@ -134,6 +163,7 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
               ))}
             </div>
           </div>
+          ) : null}
 
           {place.safetyNotes ? (
             <div className="flex gap-2 rounded-[var(--radius-md)] border border-[var(--outly-border)] bg-[#fdf1d6] px-4 py-3">
@@ -141,17 +171,19 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
               <p className="text-sm leading-relaxed text-[#9a6a00]">{place.safetyNotes}</p>
             </div>
           ) : null}
+
+          <ReviewSection
+            target={place.kind}
+            targetId={place.id}
+            onChanged={() => {
+              // The average rating above is computed by the backend; pick up the new value.
+              void fetchExploreItem(place.kind, place.id).then((result) => {
+                if (result.ok) setPlace(result.data);
+              });
+            }}
+          />
         </div>
       </div>
     </div>
   );
-}
-
-function toSavedPlace(place: NonNullable<ReturnType<typeof getExplorePlaceById>>) {
-  return {
-    id: place.id,
-    title: place.name,
-    location: place.location,
-    category: PLACE_CATEGORY_LABELS[place.category],
-  };
 }

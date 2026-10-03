@@ -6,7 +6,7 @@ type LoadingSpinnerProps = {
 
 /**
  * Small spinning ring used inside buttons/panels to indicate a pending
- * mock request. Purely decorative — the surrounding button/text already
+ * request. Purely decorative — the surrounding button/text already
  * communicates the loading state to assistive technology (e.g. changed
  * button text such as "Logging in…"), so this is `aria-hidden`.
  */

@@ -3,9 +3,9 @@ import type { Difficulty } from "@/types/place";
 
 /**
  * Shared types for the Events module (Events List, Event Detail,
- * Create/Edit Event, Participants, Organizer View). Data lives in
- * `context/event-store-context.tsx` for the browser session only —
- * frontend-only, same pattern as the activities/social modules.
+ * Create/Edit Event, Participants, Organizer View). Events come from the
+ * OUTLY backend (`lib/api/events.ts`) and live in
+ * `context/event-store-context.tsx`.
  */
 
 export type EventCategory = "hike" | "trail-run" | "cycling" | "camping" | "meetup" | "cleanup";
@@ -30,6 +30,7 @@ export type OutlyEvent = {
   title: string;
   description: string;
   category: EventCategory;
+  /** Optional link to an Explore place/trail, as an `exploreKey` ("place-3" / "trail-5"). */
   placeId?: string;
   location: string;
   meetingPoint?: string;
@@ -40,6 +41,13 @@ export type OutlyEvent = {
   requiresApproval: boolean;
   visibility: EventVisibility;
   status: EventStatus;
+  /** Moderation state: events may need a moderator's approval before they are open. */
+  approvalStatus: "pending" | "approved" | "rejected";
+  /** Confirmed participants (always present, including in list responses). */
+  goingCount: number;
+  /** The signed-in user's own status for this event, if they joined or asked to. */
+  myStatus?: EventParticipantStatus;
+  /** Who is taking part — loaded with the event's detail. */
   participants: EventParticipant[];
 };
 

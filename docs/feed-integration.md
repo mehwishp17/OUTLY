@@ -1,5 +1,8 @@
 # OUTLY — Feed backend integration
 
+> **Note:** this document describes the original frontend-only prototype. The app is now connected to the Django backend — see [backend-integration.md](./backend-integration.md) for the current behaviour.
+
+
 Home Feed (`/feed`, `/feed/new`, `/feed/[postId]`, `/feed/[postId]/edit`) is
 wired to the OUTLY backend. Backend posts carry `Post.persisted = true`;
 comments loaded from the API carry `Comment.persisted = true`.

@@ -15,6 +15,7 @@ class Report(TimeStamped):
         VIOLENCE = "VIOLENCE"
         NUDITY = "NUDITY"
         MISINFORMATION = "MISINFORMATION"
+        INAPPROPRIATE = "INAPPROPRIATE"
         UNSAFE = "UNSAFE"
         OTHER = "OTHER"
 

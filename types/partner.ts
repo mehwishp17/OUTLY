@@ -3,11 +3,11 @@ import type { SkillLevel } from "@/types/profile";
 
 /**
  * Shared types for the Adventure Partner module (Partner Requests,
- * Request Detail, Create Request, Join Requests). Data lives in
- * `context/partner-store-context.tsx` for the browser session only —
- * frontend-only, same pattern as the other domain modules. Reuses
- * `ActivityKind` (from Activities) and `SkillLevel` (from Profile)
- * rather than introducing parallel enums.
+ * Request Detail, Create Request, Join Requests). Requests come from the
+ * OUTLY backend (`lib/api/partner.ts`) and live in
+ * `context/partner-store-context.tsx`. Reuses `ActivityKind` (from
+ * Activities) and `SkillLevel` (from Profile) rather than introducing
+ * parallel enums.
  */
 
 export type PartnerRequestStatus = "open" | "closed";
@@ -15,7 +15,10 @@ export type PartnerRequestStatus = "open" | "closed";
 export type JoinRequestStatus = "pending" | "accepted" | "declined";
 
 export type JoinRequest = {
+  /** The join request's own id (used to accept/decline it). */
   id: string;
+  /** The person asking to join. */
+  userId: string;
   name: string;
   avatarUrl?: string;
   message?: string;
@@ -30,9 +33,15 @@ export type PartnerRequest = {
   destination: string;
   preferredAt: string;
   experienceLevel: SkillLevel;
+  /** Total spots the poster is offering. */
   spots: number;
+  /** Spots already taken by accepted partners (always present). */
+  spotsFilled: number;
   description: string;
   status: PartnerRequestStatus;
+  /** The signed-in user's own join request for this post, if they made one. */
+  myJoinStatus?: JoinRequestStatus;
+  /** Everyone who asked to join — loaded for the poster only. */
   joinRequests: JoinRequest[];
 };
 

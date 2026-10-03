@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
@@ -9,9 +9,12 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
+import { ReviewSection } from "@/components/reviews/review-section";
 import { useEventStore } from "@/context/event-store-context";
 import { useSocialStore } from "@/context/social-store-context";
-import { getExplorePlaceById } from "@/lib/mock/mock-places";
+import { fetchExploreItem } from "@/lib/api/places";
+import type { ExplorePlace } from "@/types/place";
 import { EVENT_CATEGORY_ICONS, EVENT_CATEGORY_LABELS, EVENT_VISIBILITY_LABELS } from "@/types/event";
 
 type EventDetailViewProps = {
@@ -31,10 +34,40 @@ function formatDateTime(iso: string): string {
 export function EventDetailView({ eventId }: EventDetailViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getEventById, deleteEvent, cancelEvent, joinEvent, leaveEvent } = useEventStore();
+  const { getEventById, deleteEvent, cancelEvent, joinEvent, leaveEvent, loadEvent } = useEventStore();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [joinMessage, setJoinMessage] = useState<{ variant: "success" | "error" | "info"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [linked, setLinked] = useState<{ key: string; place?: ExplorePlace }>();
   const event = getEventById(eventId);
+  const linkedKey = event?.placeId;
+  const linkedPlace = linked && linked.key === linkedKey ? linked.place : undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadEvent(eventId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, loadEvent]);
+
+  // The place or trail this event is linked to (key like "place-3" or "trail-5").
+  useEffect(() => {
+    if (!linkedKey) return;
+    const [kind, id] = linkedKey.split("-");
+    let cancelled = false;
+    void fetchExploreItem(kind === "trail" ? "trail" : "place", id).then((result) => {
+      if (!cancelled) setLinked({ key: linkedKey, place: result.ok ? result.data : undefined });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedKey]);
+
+  if (!event && loading) return <LoadingState message="Loading event…" />;
 
   if (!event) {
     return (
@@ -55,21 +88,31 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
   }
 
   const isOrganizer = event.organizerId === currentUser.id;
-  const myParticipation = event.participants.find((p) => p.id === currentUser.id);
-  const goingCount = event.participants.filter((p) => p.status === "going").length;
+  const myStatus = event.myStatus;
+  const goingCount = event.goingCount;
   const pendingCount = event.participants.filter((p) => p.status === "pending").length;
-  const linkedPlace = event.placeId ? getExplorePlaceById(event.placeId) : undefined;
-  const canJoin = event.status === "upcoming" && !myParticipation;
+  const canJoin = event.status === "upcoming" && !myStatus;
 
-  function handleJoin() {
-    const result = joinEvent(event!.id);
-    if (result === "full") {
+  async function handleJoin() {
+    setBusy(true);
+    const { result, error } = await joinEvent(event!.id);
+    setBusy(false);
+    if (error) {
+      setJoinMessage({ variant: "error", text: error });
+    } else if (result === "full") {
       setJoinMessage({ variant: "error", text: "This event is at capacity." });
     } else if (result === "requested") {
       setJoinMessage({ variant: "info", text: "Request sent — the organizer needs to approve you before you're confirmed." });
     } else {
       setJoinMessage({ variant: "success", text: "You're in! See you there." });
     }
+  }
+
+  async function handleLeave() {
+    setBusy(true);
+    const error = await leaveEvent(event!.id);
+    setBusy(false);
+    setJoinMessage(error ? { variant: "error", text: error } : null);
   }
 
   return (
@@ -96,7 +139,7 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
                 {event.title}
               </h1>
               <p className="text-sm text-[var(--outly-muted)]">
-                {EVENT_CATEGORY_LABELS[event.category]} · Organized by {event.organizerName}
+                {EVENT_CATEGORY_LABELS[event.category]} · Organized by {isOrganizer ? currentUser.name || "You" : event.organizerName}
               </p>
             </div>
           </div>
@@ -108,7 +151,15 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
                 { label: "Edit event", onSelect: () => router.push(`/events/${event.id}/edit`) },
                 { label: "View participants", onSelect: () => router.push(`/events/${event.id}/participants`) },
                 ...(event.status === "upcoming"
-                  ? [{ label: "Cancel event", onSelect: () => cancelEvent(event.id) }]
+                  ? [
+                      {
+                        label: "Cancel event",
+                        onSelect: async () => {
+                          const error = await cancelEvent(event.id);
+                          if (error) setJoinMessage({ variant: "error", text: error });
+                        },
+                      },
+                    ]
                   : []),
                 { label: "Delete event", destructive: true, onSelect: () => setConfirmingDelete(true) },
               ]}
@@ -133,7 +184,8 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
             <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
               When
             </dt>
-            <dd className="mt-1 text-sm text-[var(--outly-ink)]">{formatDateTime(event.startAt)}</dd>
+            {/* Locale/timezone differ between server and browser. */}
+            <dd suppressHydrationWarning className="mt-1 text-sm text-[var(--outly-ink)]">{formatDateTime(event.startAt)}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
@@ -187,7 +239,7 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
             />
           ) : null}
 
-          {myParticipation?.status === "pending" ? (
+          {myStatus === "pending" ? (
             <Alert variant="info" title="Your request to join is pending organizer approval." className="mb-4" />
           ) : null}
 
@@ -196,16 +248,16 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
               href={`/events/${event.id}/participants`}
               className="text-sm font-semibold text-[var(--outly-violet)] hover:text-[var(--outly-purple-dark)]"
             >
-              View {event.participants.length} participant{event.participants.length === 1 ? "" : "s"}
+              View {goingCount} participant{goingCount === 1 ? "" : "s"}
             </Link>
 
             {!isOrganizer && event.status === "upcoming" ? (
-              myParticipation ? (
-                <Button variant="secondary" onClick={() => leaveEvent(event.id)}>
-                  {myParticipation.status === "pending" ? "Withdraw request" : "Leave event"}
+              myStatus && myStatus !== "declined" ? (
+                <Button variant="secondary" onClick={handleLeave} disabled={busy}>
+                  {myStatus === "pending" ? "Withdraw request" : "Leave event"}
                 </Button>
               ) : canJoin ? (
-                <Button onClick={handleJoin}>
+                <Button onClick={handleJoin} disabled={busy}>
                   {event.requiresApproval ? "Request to join" : "Join event"}
                 </Button>
               ) : null
@@ -214,13 +266,28 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
         </div>
       </div>
 
+      {event.status === "completed" ? (
+        <div className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
+          <ReviewSection
+            target="event"
+            targetId={event.id}
+            canWrite={myStatus === "going" && !isOrganizer}
+            writeHint="Only people who joined this event can review it."
+          />
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={confirmingDelete}
         title="Delete this event?"
         description="This can't be undone."
-        onConfirm={() => {
-          deleteEvent(event.id);
+        onConfirm={async () => {
+          const error = await deleteEvent(event.id);
           setConfirmingDelete(false);
+          if (error) {
+            setJoinMessage({ variant: "error", text: error });
+            return;
+          }
           router.push("/events");
         }}
         onCancel={() => setConfirmingDelete(false)}

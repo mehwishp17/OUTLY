@@ -1,9 +1,7 @@
 /**
- * Shared types for the Phase 3 social module (feed, post detail, create
- * / edit post, comments). All posts and comments live in
- * `context/social-store-context.tsx` for the duration of the browser
- * session only — nothing here is persisted to a backend or database, and
- * everything resets on page reload.
+ * Shared types for the social module (feed, post detail, create / edit
+ * post, comments). Posts and comments come from the OUTLY backend through
+ * `lib/api/feed.ts` and live in `context/social-store-context.tsx`.
  */
 
 export type Comment = {
@@ -14,8 +12,7 @@ export type Comment = {
   authorAvatarUrl?: string;
   content: string;
   createdAt: string;
-  /** True when this comment came from the OUTLY backend. The backend has no
-   * comment edit/delete endpoints, so persisted comments are read-only. */
+  /** True when this comment is stored by the OUTLY backend. */
   persisted?: boolean;
 };
 
@@ -33,21 +30,19 @@ export type Post = {
    * filtered out of the Home Feed and Group Feed but still visible (and
    * reversible) from the Admin Content screen. */
   hidden?: boolean;
-  /** Local object URLs / data URLs only — never uploaded anywhere. */
+  /** Photo URLs served by the backend (same order as `mediaIds`). */
   images?: string[];
+  /** Backend media ids of `images`, used to keep photos when a post is edited. */
+  mediaIds?: number[];
   /** CSS gradient used as a lightweight illustrative visual when a seed
    * post has no attached image. */
   gradient?: string;
   createdAt: string;
   updatedAt?: string;
-  /** True when this post was loaded from / saved to the OUTLY backend
-   * (Home Feed). Mock posts (e.g. group posts) leave this unset. */
+  /** True when this post is stored by the OUTLY backend (always, now). */
   persisted?: boolean;
-  /** LOCAL-ONLY (no backend endpoint): like state lasts for this browser
-   * session and is never sent anywhere. */
   likeCount: number;
   likedByCurrentUser: boolean;
-  /** LOCAL-ONLY (no backend endpoint), like `likeCount`. */
   savedByCurrentUser: boolean;
   comments: Comment[];
 };

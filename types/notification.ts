@@ -1,12 +1,12 @@
 import type { IconName } from "@/components/ui/icon";
 
 /**
- * Shared types for the Notifications module. Data lives in
- * `context/notification-store-context.tsx` for the browser session only
- * — frontend-only, same pattern as the other domain modules. Covers
- * every notification category named in the Notification Module
- * requirements (follows, likes, comments, join requests, event
- * approvals/reminders, group activity, messages, reviews, moderation).
+ * Shared types for the Notifications module. Notifications come from the
+ * OUTLY backend (`lib/api/notifications.ts`) and live in
+ * `context/notification-store-context.tsx`. Covers every notification
+ * category named in the Notification Module requirements (follows, likes,
+ * comments, join requests, event approvals/reminders, group activity,
+ * messages, reviews, moderation) plus badges and system messages.
  */
 
 export type NotificationType =
@@ -19,7 +19,9 @@ export type NotificationType =
   | "group_activity"
   | "message"
   | "review"
-  | "moderation";
+  | "moderation"
+  | "badge"
+  | "system";
 
 export type OutlyNotification = {
   id: string;
@@ -47,4 +49,6 @@ export const NOTIFICATION_TYPE_ICONS: Record<NotificationType, IconName> = {
   message: "message-circle",
   review: "star-filled",
   moderation: "shield-check",
+  badge: "trophy",
+  system: "bell",
 };

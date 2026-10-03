@@ -242,3 +242,17 @@ def test_concurrent_joins_never_exceed_capacity(make_user):
         t.join(timeout=60)
     assert sorted(results) == [201, 201, 201, 409, 409, 409, 409, 409]
     assert EventParticipant.objects.filter(event=event_obj, status="APPROVED").count() == 3
+
+
+def test_permanent_delete_only_when_nobody_depends_on_the_event(alice, bob, client_for):
+    ca = client_for(alice)
+    busy = event(ca)["id"]
+    client_for(bob).post(f"/api/v1/events/{busy}/join/")
+    assert client_for(bob).delete(f"/api/v1/events/{busy}/?permanent=true").status_code == 403
+    blocked = ca.delete(f"/api/v1/events/{busy}/?permanent=true")
+    assert blocked.status_code == 400 and "Cancel it first" in body(blocked)["errors"]["detail"][0]
+    assert ca.delete(f"/api/v1/events/{busy}/").status_code == 204  # cancel (notifies bob)
+    assert ca.delete(f"/api/v1/events/{busy}/?permanent=true").status_code == 204
+    assert ca.get(f"/api/v1/events/{busy}/").status_code == 404
+    empty = event(ca, title="Nobody came")["id"]
+    assert ca.delete(f"/api/v1/events/{empty}/?permanent=true").status_code == 204

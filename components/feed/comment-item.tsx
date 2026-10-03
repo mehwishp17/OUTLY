@@ -26,16 +26,18 @@ export function CommentItem({ postId, comment }: CommentItemProps) {
   const [draft, setDraft] = useState(comment.content);
   const [error, setError] = useState<string>();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // Backend comments are read-only: the API has no comment edit/delete
-  // endpoints, so the actions menu is only offered for local mock comments.
-  const isAuthor = isCurrentUser(comment.authorId) && !comment.persisted;
+  const isAuthor = isCurrentUser(comment.authorId);
 
-  function handleSaveEdit() {
+  async function handleSaveEdit() {
     const validationError = validateCommentContent(draft);
     setError(validationError);
     if (validationError) return;
 
-    editComment(postId, comment.id, draft);
+    const backendError = await editComment(postId, comment.id, draft);
+    if (backendError) {
+      setError(backendError);
+      return;
+    }
     setIsEditing(false);
   }
 
@@ -109,9 +111,10 @@ export function CommentItem({ postId, comment }: CommentItemProps) {
         open={confirmingDelete}
         title="Delete this comment?"
         description="This can't be undone."
-        onConfirm={() => {
-          deleteComment(postId, comment.id);
+        onConfirm={async () => {
+          const backendError = await deleteComment(postId, comment.id);
           setConfirmingDelete(false);
+          if (backendError) setError(backendError);
         }}
         onCancel={() => setConfirmingDelete(false)}
       />

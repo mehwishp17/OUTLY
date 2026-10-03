@@ -194,7 +194,9 @@ a {
 
 .reveal.is-visible {
   opacity: 1;
-  transform: translateY(0);
+  /* "none" (not translateY(0)) so a revealed card is not a stacking context:
+     a modal dialog rendered inside it must stack above the cards after it. */
+  transform: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

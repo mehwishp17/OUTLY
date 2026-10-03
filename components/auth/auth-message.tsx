@@ -8,8 +8,7 @@ type AuthMessageProps = {
 
 /**
  * Auth-flow-specific success/error banner. A thin wrapper around the
- * generic `Alert` primitive with copy conventions used across every
- * mocked auth form (e.g. always framing success as "(mocked)").
+ * generic `Alert` primitive used across every auth form.
  */
 export function AuthMessage({ variant, title, children }: AuthMessageProps) {
   return (

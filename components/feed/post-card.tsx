@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
-import { CoverImage } from "@/components/ui/cover-image";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
@@ -14,7 +13,6 @@ import { SaveButton } from "@/components/social/save-button";
 import { ShareButton } from "@/components/social/share-button";
 import { useAdminStore } from "@/context/admin-store-context";
 import { useSocialStore } from "@/context/social-store-context";
-import { POST_PHOTOS } from "@/lib/adventure-images";
 import { formatRelativeTime } from "@/lib/utils";
 import type { Post } from "@/types/post";
 import type { ReportReason } from "@/types/report";
@@ -35,40 +33,29 @@ type PostCardProps = {
  * via `useSocialStore` directly rather than through prop drilling. */
 export function PostCard({ post, linkToDetail = true, onDeleted }: PostCardProps) {
   const router = useRouter();
-  const { currentUser, isCurrentUser, toggleLike, toggleSave, deletePost, deleteBackendPost } =
-    useSocialStore();
+  const { isCurrentUser, toggleLike, toggleSave, deletePost } = useSocialStore();
   const { createReport } = useAdminStore();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [reportingPost, setReportingPost] = useState(false);
   const [actionError, setActionError] = useState<string>();
+  const [reportNotice, setReportNotice] = useState<string>();
   const isAuthor = isCurrentUser(post.authorId);
   const detailHref = `/feed/${post.id}`;
-  const photo = POST_PHOTOS[post.id];
   const latestComment = post.comments[post.comments.length - 1];
 
-  function handleSubmitReport(reason: ReportReason, description?: string) {
-    createReport({
-      targetType: "post",
-      targetId: post.id,
-      targetLabel: post.content.length > 60 ? `${post.content.slice(0, 60)}…` : post.content,
-      reason,
-      description,
-      reporterId: currentUser.id,
-    });
+  async function handleSubmitReport(reason: ReportReason, description?: string) {
+    const error = await createReport({ targetType: "post", targetId: post.id, reason, description });
     setReportingPost(false);
+    setActionError(error ?? undefined);
+    if (!error) setReportNotice("Thanks - our moderators will take a look.");
   }
 
   async function handleDelete() {
-    if (post.persisted) {
-      const error = await deleteBackendPost(post.id);
-      setConfirmingDelete(false);
-      if (error) {
-        setActionError(error);
-        return;
-      }
-    } else {
-      deletePost(post.id);
-      setConfirmingDelete(false);
+    const error = await deletePost(post.id);
+    setConfirmingDelete(false);
+    if (error) {
+      setActionError(error);
+      return;
     }
     onDeleted?.();
   }
@@ -90,7 +77,7 @@ export function PostCard({ post, linkToDetail = true, onDeleted }: PostCardProps
           }
         >
           {post.images.map((image) => (
-            // eslint-disable-next-line @next/next/no-img-element -- local blob/data preview URL only, not a remote image.
+            // eslint-disable-next-line @next/next/no-img-element -- photo served by the backend (a different origin than the app).
             <img
               key={image}
               src={image}
@@ -98,14 +85,6 @@ export function PostCard({ post, linkToDetail = true, onDeleted }: PostCardProps
               className={`w-full object-cover transition-transform duration-300 ease-out hover:scale-[1.02] motion-reduce:transition-none motion-reduce:hover:scale-100 ${post.images?.length === 1 ? "aspect-[4/3]" : "aspect-square"}`}
             />
           ))}
-        </div>
-      ) : post.gradient ? (
-        <div
-          aria-hidden="true"
-          className="group relative mt-3 h-48 overflow-hidden rounded-[var(--radius-lg)] sm:h-64"
-          style={{ backgroundImage: post.gradient }}
-        >
-          {photo ? <CoverImage src={photo} sizes="(min-width: 768px) 640px, 100vw" position="center 40%" /> : null}
         </div>
       ) : null}
     </>
@@ -169,6 +148,11 @@ export function PostCard({ post, linkToDetail = true, onDeleted }: PostCardProps
           {actionError}
         </p>
       ) : null}
+      {reportNotice ? (
+        <p role="status" className="mt-3 text-sm text-[#1e7a3a]">
+          {reportNotice}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex items-center justify-between border-t border-[var(--outly-border)] pt-3">
         <div className="flex items-center gap-0.5">
@@ -225,7 +209,7 @@ export function PostCard({ post, linkToDetail = true, onDeleted }: PostCardProps
       <ConfirmDialog
         open={confirmingDelete}
         title="Delete this post?"
-        description="This can't be undone. The post and its comments will be removed for everyone (in this preview session)."
+        description="This can't be undone. The post and its comments will be removed for everyone."
         onConfirm={handleDelete}
         onCancel={() => setConfirmingDelete(false)}
       />

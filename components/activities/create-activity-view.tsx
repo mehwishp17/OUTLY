@@ -15,9 +15,11 @@ export function CreateActivityView() {
         description="Plan a hike, ride, or camping trip — and invite people to join."
         submitLabel="Create activity"
         onCancel={() => router.push("/activities")}
-        onSubmit={(values) => {
-          const activity = createActivity(values);
+        onSubmit={async (values) => {
+          const { activity, error } = await createActivity(values);
+          if (error || !activity) return error;
           router.push(`/activities/${activity.id}`);
+          return undefined;
         }}
       />
     </div>

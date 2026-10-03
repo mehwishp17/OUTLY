@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdminAccessGate } from "@/components/admin/admin-access-gate";
 import { AppHeader } from "@/components/layout/app-header";
 import { AdminContentView } from "@/components/admin/admin-content-view";
 
@@ -11,7 +12,9 @@ export default function AdminContentPage() {
   return (
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
-      <AdminContentView />
+      <AdminAccessGate level="moderator">
+        <AdminContentView />
+      </AdminAccessGate>
     </div>
   );
 }

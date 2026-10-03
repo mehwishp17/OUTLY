@@ -1,8 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
 import { CoverImage } from "@/components/ui/cover-image";
 import { Icon } from "@/components/ui/icon";
-import { EVENT_PHOTOS } from "@/lib/adventure-images";
+import { useExplorePhoto } from "@/lib/use-explore-photo";
 import { EVENT_CATEGORY_ICONS, EVENT_CATEGORY_LABELS } from "@/types/event";
 import type { OutlyEvent } from "@/types/event";
 
@@ -43,8 +45,8 @@ function formatDate(iso: string): string {
 }
 
 export function EventCard({ event }: EventCardProps) {
-  const photo = EVENT_PHOTOS[event.id];
-  const goingCount = event.participants.filter((p) => p.status === "going").length;
+  const goingCount = event.goingCount;
+  const photo = useExplorePhoto(event.placeId);
 
   return (
     <Link
@@ -57,9 +59,7 @@ export function EventCard({ event }: EventCardProps) {
         role="img"
         aria-label={`${event.title} — illustrative event visual`}
       >
-        {photo ? (
-          <CoverImage src={photo} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" />
-        ) : null}
+        {photo ? <CoverImage src={photo} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" /> : null}
         <span className="relative flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
           <Icon name={EVENT_CATEGORY_ICONS[event.category]} className="h-3.5 w-3.5" />
           {EVENT_CATEGORY_LABELS[event.category]}

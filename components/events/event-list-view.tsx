@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { EventCard } from "@/components/events/event-card";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Tabs } from "@/components/ui/tabs";
 import { useEventStore } from "@/context/event-store-context";
 import type { OutlyEvent } from "@/types/event";
@@ -31,10 +34,31 @@ function EventGroup({ events }: { events: OutlyEvent[] }) {
 
 /** Events List: "Upcoming" / "Past" / "All" tabs over every event. */
 export function EventListView() {
-  const { events } = useEventStore();
+  const { events, status, error, refresh } = useEventStore();
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const sorted = sortByStartAtAsc(events);
   const upcoming = sorted.filter((event) => event.status === "upcoming");
   const past = sorted.filter((event) => event.status !== "upcoming");
+
+  // Loading/error show inside the tabs, so the selected tab survives the data arriving.
+  const notice =
+    status === "loading" && events.length === 0 ? (
+        <LoadingState message="Loading events…" />
+    ) : status === "error" && events.length === 0 ? (
+        <ErrorState
+          title="We couldn't load events"
+          description={error?.message}
+          action={
+            <Button variant="secondary" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          }
+        />
+    ) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -56,9 +80,9 @@ export function EventListView() {
       <Tabs
         ariaLabel="Event filters"
         items={[
-          { id: "upcoming", label: `Upcoming (${upcoming.length})`, content: <EventGroup events={upcoming} /> },
-          { id: "past", label: `Past (${past.length})`, content: <EventGroup events={past} /> },
-          { id: "all", label: "All", content: <EventGroup events={sorted} /> },
+          { id: "upcoming", label: `Upcoming (${upcoming.length})`, content: notice ?? <EventGroup events={upcoming} /> },
+          { id: "past", label: `Past (${past.length})`, content: notice ?? <EventGroup events={past} /> },
+          { id: "all", label: "All", content: notice ?? <EventGroup events={sorted} /> },
         ]}
       />
     </div>

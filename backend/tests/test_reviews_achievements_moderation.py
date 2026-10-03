@@ -258,3 +258,25 @@ def test_analytics_is_cached(admin, client_for, django_assert_num_queries):
     c.get("/api/v1/admin/analytics/overview/")
     with django_assert_num_queries(1):  # only the auth user lookup
         c.get("/api/v1/admin/analytics/overview/")
+
+
+def test_moderator_queue_includes_target_label_without_per_report_queries(alice, bob, moderator, client_for, make_post, django_assert_max_num_queries):
+    pid = make_post(bob, "a very questionable post")["id"]
+    client_for(alice).post("/api/v1/reports/", {"target_type": "POST", "target_id": pid, "reason": "INAPPROPRIATE"}, format="json")
+    client_for(alice).post("/api/v1/reports/", {"target_type": "USER", "target_id": bob.id, "reason": "OTHER"}, format="json")
+    with django_assert_max_num_queries(8):
+        rows = data(client_for(moderator).get("/api/v1/admin/reports/"))
+    labels = {r["target_type"]: r["target_label"] for r in rows}
+    assert labels["POST"] == "a very questionable post" and labels["USER"] == bob.profile.display_name
+
+
+def test_analytics_overview_counts_places_and_trails(admin, client_for):
+    from apps.places.models import Place, Trail
+
+    Place.objects.create(name="P", latitude=1, longitude=1)
+    Trail.objects.create(name="T", location="X")
+    from django.core.cache import cache
+
+    cache.clear()
+    d = data(client_for(admin).get("/api/v1/admin/analytics/overview/"))
+    assert d["content"] == {"places": 1, "trails": 1}

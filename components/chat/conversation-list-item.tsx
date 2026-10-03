@@ -15,18 +15,17 @@ type ConversationListItemProps = {
 export function ConversationListItem({ conversation, unreadCount }: ConversationListItemProps) {
   const { currentUser } = useSocialStore();
   const { getGroupById } = useGroupStore();
-  const lastMessage = conversation.messages[conversation.messages.length - 1];
 
   let title: string;
   let avatarNode: React.ReactNode;
 
   if (conversation.kind === "group") {
     const group = conversation.groupId ? getGroupById(conversation.groupId) : undefined;
-    title = group?.name ?? "Group chat";
+    title = conversation.groupName ?? group?.name ?? "Group chat";
     avatarNode = (
       <span
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white"
-        style={{ backgroundImage: group?.gradient }}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white gradient-brand"
+        style={group?.gradient ? { backgroundImage: group.gradient } : undefined}
         aria-hidden="true"
       >
         <Icon name="message-circle" className="h-5 w-5" />
@@ -49,14 +48,14 @@ export function ConversationListItem({ conversation, unreadCount }: Conversation
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-semibold text-[var(--outly-ink)]">{title}</p>
-            {lastMessage ? (
+            {conversation.lastMessageAt ? (
               <span className="shrink-0 text-xs text-[var(--outly-muted)]">
-                {formatRelativeTime(lastMessage.createdAt)}
+                {formatRelativeTime(conversation.lastMessageAt)}
               </span>
             ) : null}
           </div>
           <p className="mt-0.5 truncate text-sm text-[var(--outly-muted)]">
-            {lastMessage ? `${lastMessage.senderName}: ${lastMessage.content}` : "No messages yet"}
+            {conversation.lastMessagePreview || "No messages yet"}
           </p>
         </div>
         {unreadCount > 0 ? (

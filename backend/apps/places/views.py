@@ -23,7 +23,11 @@ EXPLORE_PARAMS = [
 
 
 def _saved_ids(user):
-    return set(SavedPlace.objects.filter(user=user).values_list("place_id", flat=True))
+    return set(SavedPlace.objects.filter(user=user, place__isnull=False).values_list("place_id", flat=True))
+
+
+def _saved_trail_ids(user):
+    return set(SavedPlace.objects.filter(user=user, trail__isnull=False).values_list("trail_id", flat=True))
 
 
 class PlaceListCreateView(generics.ListCreateAPIView):
@@ -87,7 +91,11 @@ class TrailListCreateView(generics.ListCreateAPIView):
         )
 
     def get_serializer_context(self):
-        return {**super().get_serializer_context(), "compact": self.request.method == "GET"}
+        return {
+            **super().get_serializer_context(),
+            "compact": self.request.method == "GET",
+            "saved_ids": _saved_trail_ids(self.request.user),
+        }
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, is_verified=False)
@@ -99,6 +107,9 @@ class TrailDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Trail.objects.filter(is_active=True).annotate(points_count=Count("points")).prefetch_related("points")
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "saved_ids": _saved_trail_ids(self.request.user)}
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)
@@ -152,6 +163,20 @@ class PlaceSaveView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class TrailSaveView(APIView):
+    @extend_schema(request=None, responses={201: None})
+    def post(self, request, trail_id):
+        if not Trail.objects.filter(pk=trail_id, is_active=True).exists():
+            raise NotFound("Trail not found.")
+        SavedPlace.objects.get_or_create(user=request.user, trail_id=trail_id)
+        return Response({"saved": True}, status=status.HTTP_201_CREATED)
+
+    @extend_schema(responses={204: None})
+    def delete(self, request, trail_id):
+        SavedPlace.objects.filter(user=request.user, trail_id=trail_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class SavedPlacesView(generics.ListAPIView):
     serializer_class = s.PlaceSerializer
     pagination_class = OffsetPage
@@ -161,6 +186,17 @@ class SavedPlacesView(generics.ListAPIView):
 
     def get_serializer_context(self):
         return {**super().get_serializer_context(), "saved_ids": _saved_ids(self.request.user)}
+
+
+class SavedTrailsView(generics.ListAPIView):
+    serializer_class = s.TrailSerializer
+    pagination_class = OffsetPage
+
+    def get_queryset(self):
+        return Trail.objects.filter(is_active=True, saves__user=self.request.user).order_by("-saves__created_at")
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "compact": True, "saved_ids": _saved_trail_ids(self.request.user)}
 
 
 class MapView(APIView):

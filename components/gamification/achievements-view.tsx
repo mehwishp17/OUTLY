@@ -1,22 +1,41 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { GamificationNav } from "@/components/gamification/gamification-nav";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
-import { useActivityStore } from "@/context/activity-store-context";
-import { useSocialStore } from "@/context/social-store-context";
-import { getAllBadgeProgress } from "@/lib/gamification";
+import { LoadingState } from "@/components/ui/loading-state";
+import { fetchBadgeProgress } from "@/lib/api/gamification";
+import type { BadgeProgress } from "@/lib/gamification";
 import { formatRelativeTime } from "@/lib/utils";
 
-/** Achievements: a chronological timeline of badges the current user has
- * actually earned, each dated by the real activity that crossed its
- * threshold (see `lib/gamification.ts`) — not a separate fabricated
- * event log. */
+/** Achievements: a timeline of the badges the current user has earned,
+ * each dated by when the backend awarded it. */
 export function AchievementsView() {
-  const { currentUser } = useSocialStore();
-  const { activities } = useActivityStore();
-  const earned = getAllBadgeProgress(currentUser.id, activities)
+  const [progressList, setProgressList] = useState<BadgeProgress[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchBadgeProgress().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setProgressList(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const earned = progressList
     .filter((progress) => progress.earned)
     .sort((a, b) => new Date(b.earnedAt ?? 0).getTime() - new Date(a.earnedAt ?? 0).getTime());
 
@@ -27,13 +46,19 @@ export function AchievementsView() {
           Achievements
         </h1>
         <p className="mt-1 text-sm text-[var(--outly-muted)]">
-          A timeline of the badges you&apos;ve earned so far.
+          {earned.length === 0
+            ? "A timeline of the badges you earn will appear here."
+            : `${earned.length} badge${earned.length === 1 ? "" : "s"} earned so far, newest first.`}
         </p>
       </div>
 
       <GamificationNav active="achievements" />
 
-      {earned.length === 0 ? (
+      {status === "loading" ? (
+        <LoadingState message="Loading your achievements…" />
+      ) : status === "error" ? (
+        <ErrorState title="We couldn't load your achievements" description={error} />
+      ) : earned.length === 0 ? (
         <EmptyState
           icon="trophy"
           title="No achievements yet"

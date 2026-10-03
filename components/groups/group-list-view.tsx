@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { GroupCard } from "@/components/groups/group-card";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Tabs } from "@/components/ui/tabs";
 import { useGroupStore } from "@/context/group-store-context";
-import { useSocialStore } from "@/context/social-store-context";
 import type { Group } from "@/types/group";
 
 function GroupGrid({ groups }: { groups: Group[] }) {
@@ -26,14 +28,33 @@ function GroupGrid({ groups }: { groups: Group[] }) {
   );
 }
 
-/** Groups List: "My groups" / "Discover" tabs over every group. */
+/** Groups List: "My groups" / "Discover" tabs over every group the backend lists
+ * for you (private groups are discoverable so you can ask to join). */
 export function GroupListView() {
-  const { currentUser } = useSocialStore();
-  const { groups } = useGroupStore();
-  const myGroups = groups.filter((group) => group.members.some((m) => m.id === currentUser.id));
-  const discoverGroups = groups.filter(
-    (group) => !group.members.some((m) => m.id === currentUser.id) && group.visibility === "public",
-  );
+  const { groups, status, error, refresh } = useGroupStore();
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const myGroups = groups.filter((group) => group.myRole);
+  const discoverGroups = groups.filter((group) => !group.myRole);
+
+  // Loading/error show inside the tabs, so the selected tab survives the data arriving.
+  const notice =
+    status === "loading" && groups.length === 0 ? (
+        <LoadingState message="Loading groups…" />
+    ) : status === "error" && groups.length === 0 ? (
+        <ErrorState
+          title="We couldn't load groups"
+          description={error?.message}
+          action={
+            <Button variant="secondary" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          }
+        />
+    ) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -55,8 +76,8 @@ export function GroupListView() {
       <Tabs
         ariaLabel="Group filters"
         items={[
-          { id: "mine", label: `My groups (${myGroups.length})`, content: <GroupGrid groups={myGroups} /> },
-          { id: "discover", label: "Discover", content: <GroupGrid groups={discoverGroups} /> },
+          { id: "mine", label: `My groups (${myGroups.length})`, content: notice ?? <GroupGrid groups={myGroups} /> },
+          { id: "discover", label: "Discover", content: notice ?? <GroupGrid groups={discoverGroups} /> },
         ]}
       />
     </div>

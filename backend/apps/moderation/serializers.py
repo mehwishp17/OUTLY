@@ -24,13 +24,17 @@ class ReportSerializer(serializers.ModelSerializer):
     reporter_name = serializers.SerializerMethodField()
     target_owner_id = serializers.IntegerField(read_only=True)
     assigned_to_id = serializers.IntegerField(read_only=True)
+    target_label = serializers.SerializerMethodField()
 
     class Meta:
         model = Report
         fields = [
-            "id", "reporter_id", "reporter_name", "target_type", "target_id", "target_owner_id", "reason",
-            "description", "status", "priority", "assigned_to_id", "created_at", "updated_at",
+            "id", "reporter_id", "reporter_name", "target_type", "target_id", "target_label", "target_owner_id",
+            "reason", "description", "status", "priority", "assigned_to_id", "created_at", "updated_at",
         ]
+
+    def get_target_label(self, obj) -> str | None:
+        return (self.context.get("labels") or {}).get(obj.pk)
 
     def get_reporter_name(self, obj) -> str:
         return obj.reporter.profile.display_name or obj.reporter.profile.username

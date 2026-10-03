@@ -1,4 +1,10 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useSocialStore } from "@/context/social-store-context";
 import { ONBOARDING_ACTIVITY_LEVELS, ONBOARDING_INTERESTS } from "@/lib/constants";
 import type { OnboardingData } from "@/types/onboarding";
 
@@ -8,11 +14,28 @@ type OnboardingCompleteProps = {
 };
 
 /**
- * Final onboarding step — summary of local-state selections only. No
- * data is submitted anywhere; "Start exploring" continues into the
- * signed-in app's Home Feed.
+ * Final onboarding step — a summary of the selections. "Start exploring"
+ * saves them to the profile (they also personalise Explore and the feed) and
+ * continues into the signed-in app's Home Feed.
  */
 export function OnboardingComplete({ data, onEdit }: OnboardingCompleteProps) {
+  const router = useRouter();
+  const { saveOnboarding } = useSocialStore();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function handleStart() {
+    setSaving(true);
+    setError(undefined);
+    const failure = await saveOnboarding(data);
+    if (failure) {
+      setError(failure);
+      setSaving(false);
+      return;
+    }
+    router.push("/feed");
+  }
+
   const interestLabels = ONBOARDING_INTERESTS.filter((interest) =>
     data.interests.includes(interest.id),
   ).map((interest) => interest.label);
@@ -60,9 +83,21 @@ export function OnboardingComplete({ data, onEdit }: OnboardingCompleteProps) {
         </div>
       </dl>
 
+      {error ? (
+        <p role="alert" className="mt-4 text-sm text-[#B3164C]">
+          {error}
+        </p>
+      ) : null}
+
       <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-        <Button href="/feed" size="lg" className="w-full sm:w-auto">
-          Start exploring
+        <Button size="lg" className="w-full sm:w-auto" onClick={handleStart} disabled={saving}>
+          {saving ? (
+            <>
+              <LoadingSpinner /> Saving…
+            </>
+          ) : (
+            "Start exploring"
+          )}
         </Button>
         <button
           type="button"

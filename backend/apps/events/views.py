@@ -76,9 +76,17 @@ class EventDetailView(APIView):
         )
         return Response(_event_data(request, event_id))
 
-    @extend_schema(responses={204: None}, description="Cancels the event (kept for history) and notifies participants.")
+    @extend_schema(
+        parameters=[OpenApiParameter("permanent", bool, description="Delete for good (only if cancelled or nobody joined)")],
+        responses={204: None},
+        description="Cancels the event (kept for history) and notifies participants. "
+        "With ?permanent=true it is deleted for good, when nobody depends on it.",
+    )
     def delete(self, request, event_id):
-        EventService.cancel(request.user, event_id)
+        if request.query_params.get("permanent") in ("true", "1"):
+            EventService.delete_permanently(request.user, event_id)
+        else:
+            EventService.cancel(request.user, event_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

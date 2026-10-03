@@ -1,28 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { NotificationItem } from "@/components/notifications/notification-item";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { LoadingState } from "@/components/ui/loading-state";
 import { useNotificationStore } from "@/context/notification-store-context";
 
-/** Notifications List. Briefly shows a loading state on mount — the same
- * honest "connecting" stand-in used by Chat and the Explore/Feed lists —
- * before rendering notifications newest first. There is no dedicated
- * error state here: this list has no per-item route that can 404 (every
- * notification just links to real, already-existing content), and with
- * no live network layer in this frontend-only phase there's no genuine
- * failure to react to, so `ErrorState` isn't force-fitted in without a
- * real trigger. */
+/** Notifications List: loaded from the backend each time it is opened
+ * (new ones also arrive live), newest first, with loading, error and
+ * empty states. */
 export function NotificationListView() {
-  const { notifications, unreadCount, markAllAsRead } = useNotificationStore();
-  const [isLoading, setIsLoading] = useState(true);
+  const { notifications, unreadCount, status, error, refresh, markAllAsRead } = useNotificationStore();
 
   useEffect(() => {
-    const timeout = setTimeout(() => setIsLoading(false), 400);
-    return () => clearTimeout(timeout);
-  }, []);
+    void refresh();
+  }, [refresh]);
 
   const sorted = [...notifications].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -40,14 +34,24 @@ export function NotificationListView() {
           </p>
         </div>
         {unreadCount > 0 ? (
-          <Button variant="secondary" className="w-fit" onClick={markAllAsRead}>
+          <Button variant="secondary" className="w-fit shrink-0 whitespace-nowrap" onClick={markAllAsRead}>
             Mark all as read
           </Button>
         ) : null}
       </div>
 
-      {isLoading ? (
+      {(status === "idle" || status === "loading") && sorted.length === 0 ? (
         <LoadingState message="Loading notifications…" />
+      ) : status === "error" && sorted.length === 0 ? (
+        <ErrorState
+          title="We couldn't load your notifications"
+          description={error ?? undefined}
+          action={
+            <Button variant="secondary" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          }
+        />
       ) : sorted.length === 0 ? (
         <EmptyState
           icon="bell"

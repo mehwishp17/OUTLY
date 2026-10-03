@@ -3,9 +3,8 @@ import type { Difficulty } from "@/types/place";
 
 /**
  * Shared types for the Activities module (Activity List, Create Activity,
- * Activity Detail, Activity History). Data lives in
- * `context/activity-store-context.tsx` for the browser session only —
- * frontend-only, same pattern as the social/post module.
+ * Activity Detail, Activity History). Data comes from the OUTLY backend via
+ * `lib/api/activities.ts` and lives in `context/activity-store-context.tsx`.
  */
 
 export type ActivityKind = "hike" | "trail-run" | "cycling" | "camping" | "meetup";
@@ -26,7 +25,7 @@ export type Activity = {
   creatorName: string;
   title: string;
   type: ActivityKind;
-  /** Optional link to an Explore place/trail (`ExplorePlace.id`). */
+  /** Optional link to an Explore place/trail, as an `exploreKey` ("place-3" / "trail-5"). */
   placeId?: string;
   location: string;
   startAt: string;
@@ -37,6 +36,9 @@ export type Activity = {
   notes?: string;
   privacy: ActivityPrivacy;
   status: ActivityStatus;
+  /** Total participants (always present, including in list responses). */
+  participantCount: number;
+  /** Who is taking part — loaded with the activity's detail. */
   participants: ActivityParticipant[];
 };
 

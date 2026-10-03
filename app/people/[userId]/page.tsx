@@ -17,7 +17,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   return (
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
-      <PublicProfileView userId={userId} />
+      <PublicProfileView key={userId} userId={userId} />
     </div>
   );
 }

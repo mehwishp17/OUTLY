@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { PartnerRequestCard } from "@/components/partner/partner-request-card";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Tabs } from "@/components/ui/tabs";
 import { usePartnerStore } from "@/context/partner-store-context";
 import type { PartnerRequest } from "@/types/partner";
@@ -34,10 +37,31 @@ function RequestGroup({ requests }: { requests: PartnerRequest[] }) {
 /** Partner Requests list: "Open" / "Closed" / "All" tabs over every
  * adventure partner request. */
 export function PartnerListView() {
-  const { requests } = usePartnerStore();
+  const { requests, status, error, refresh } = usePartnerStore();
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const sorted = sortByPreferredAtAsc(requests);
   const open = sorted.filter((request) => request.status === "open");
   const closed = sorted.filter((request) => request.status === "closed");
+
+  // Loading/error show inside the tabs, so the selected tab survives the data arriving.
+  const notice =
+    status === "loading" && requests.length === 0 ? (
+        <LoadingState message="Loading partner requests…" />
+    ) : status === "error" && requests.length === 0 ? (
+        <ErrorState
+          title="We couldn't load partner requests"
+          description={error?.message}
+          action={
+            <Button variant="secondary" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          }
+        />
+    ) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -59,9 +83,9 @@ export function PartnerListView() {
       <Tabs
         ariaLabel="Partner request filters"
         items={[
-          { id: "open", label: `Open (${open.length})`, content: <RequestGroup requests={open} /> },
-          { id: "closed", label: `Closed (${closed.length})`, content: <RequestGroup requests={closed} /> },
-          { id: "all", label: "All", content: <RequestGroup requests={sorted} /> },
+          { id: "open", label: `Open (${open.length})`, content: notice ?? <RequestGroup requests={open} /> },
+          { id: "closed", label: `Closed (${closed.length})`, content: notice ?? <RequestGroup requests={closed} /> },
+          { id: "all", label: "All", content: notice ?? <RequestGroup requests={sorted} /> },
         ]}
       />
     </div>

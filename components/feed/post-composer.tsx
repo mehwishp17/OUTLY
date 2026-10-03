@@ -16,7 +16,10 @@ const MAX_IMAGES = 4;
 type PostComposerSubmitValues = {
   content: string;
   location?: string;
+  /** Photos left on the post: existing URLs plus the local previews of new ones. */
   images?: string[];
+  /** The new photos (local preview URL + the file to upload). */
+  files?: { url: string; file: File }[];
 };
 
 type PostComposerProps = {
@@ -30,16 +33,12 @@ type PostComposerProps = {
    * open and shows it instead of navigating away. */
   onSubmit: (values: PostComposerSubmitValues) => void | Promise<string | undefined>;
   onCancel: () => void;
-  /** Hide the Location and Photos fields. Used for backend-persisted posts,
-   * since the backend stores only the caption. */
-  captionOnly?: boolean;
 };
 
 /**
- * Shared create/edit post form. Images are previewed via local object
- * URLs only (`URL.createObjectURL`, same pattern as `AvatarUpload`) —
- * nothing is ever uploaded to a server, matching the frontend-only
- * social module documented in `types/post.ts`.
+ * Shared create/edit post form. Chosen photos are previewed through local
+ * object URLs and handed to `onSubmit` as files, which the social store
+ * uploads to the backend before saving the post.
  */
 export function PostComposer({
   title,
@@ -50,12 +49,13 @@ export function PostComposer({
   submitLabel,
   onSubmit,
   onCancel,
-  captionOnly = false,
 }: PostComposerProps) {
   const { currentUser } = useSocialStore();
   const [content, setContent] = useState(initialContent);
   const [location, setLocation] = useState(initialLocation);
   const [images, setImages] = useState<string[]>(initialImages);
+  // New photos by their local preview URL, so we upload exactly the ones that remain.
+  const pendingFiles = useRef(new Map<string, File>());
   const [errors, setErrors] = useState<PostComposerErrors>({});
   const [imageError, setImageError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,12 +81,17 @@ export function PostComposer({
         return current;
       }
       setImageError(undefined);
-      const accepted = files.slice(0, remainingSlots).map((file) => URL.createObjectURL(file));
+      const accepted = files.slice(0, remainingSlots).map((file) => {
+        const url = URL.createObjectURL(file);
+        pendingFiles.current.set(url, file);
+        return url;
+      });
       return [...current, ...accepted];
     });
   }
 
   function handleRemoveImage(url: string) {
+    pendingFiles.current.delete(url);
     setImages((current) => current.filter((image) => image !== url));
   }
 
@@ -103,8 +108,11 @@ export function PostComposer({
     setSubmitError(undefined);
     const error = await onSubmit({
       content: content.trim(),
-      location: captionOnly ? undefined : location.trim() || undefined,
-      images: captionOnly || images.length === 0 ? undefined : images,
+      location: location.trim() || undefined,
+      images,
+      files: images
+        .filter((url) => pendingFiles.current.has(url))
+        .map((url) => ({ url, file: pendingFiles.current.get(url)! })),
     });
     if (error) {
       setSubmitError(error);
@@ -137,8 +145,6 @@ export function PostComposer({
           placeholder="Share a trail update, plan a meetup, or post about your latest adventure…"
         />
 
-        {captionOnly ? null : (
-          <>
         <Input
           id="post-location"
           label="Location"
@@ -155,7 +161,7 @@ export function PostComposer({
             <div className="grid grid-cols-4 gap-2">
               {images.map((image) => (
                 <div key={image} className="relative aspect-square overflow-hidden rounded-[var(--radius-sm)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview URL only, not a remote image. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element -- blob preview or backend-served photo. */}
                   <img src={image} alt="" className="h-full w-full object-cover" />
                   <button
                     type="button"
@@ -190,13 +196,10 @@ export function PostComposer({
             onChange={handleFilesSelected}
           />
           <p className="text-xs text-[var(--outly-muted)]">
-            Up to {MAX_IMAGES} photos, stored only in this browser session — never uploaded to a
-            server.
+            Up to {MAX_IMAGES} photos (JPG, PNG or WebP, 5 MB each).
           </p>
           {imageError ? <FormError id="post-images-error">{imageError}</FormError> : null}
         </div>
-          </>
-        )}
 
         {submitError ? <FormError id="post-submit-error">{submitError}</FormError> : null}
 

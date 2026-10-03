@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
@@ -16,14 +16,21 @@ type PostDetailViewProps = {
 
 export function PostDetailView({ postId }: PostDetailViewProps) {
   const router = useRouter();
-  const { getPostById, feedStatus, ensureFeedLoaded } = useSocialStore();
+  const { getPostById, loadPostById } = useSocialStore();
   const post = getPostById(postId);
+  const [loading, setLoading] = useState(!post);
 
   useEffect(() => {
-    void ensureFeedLoaded();
-  }, [ensureFeedLoaded]);
+    let cancelled = false;
+    void loadPostById(postId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [postId, loadPostById]);
 
-  if (!post && (feedStatus === "idle" || feedStatus === "loading")) {
+  if (!post && loading) {
     return <LoadingState message="Loading post…" />;
   }
 

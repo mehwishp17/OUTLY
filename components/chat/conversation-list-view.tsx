@@ -1,29 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ConversationListItem } from "@/components/chat/conversation-list-item";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
 import { LoadingState } from "@/components/ui/loading-state";
 import { useChatStore } from "@/context/chat-store-context";
 
-/** Conversation List. Briefly shows a loading state on mount — a small,
- * honest stand-in for the real-time channel connection a WebSocket-backed
- * chat would establish (see `docs/architecture.md` future-integration
- * notes) — before rendering conversations sorted by most recent message. */
+/** Conversation List: loaded from the backend, newest activity first, with
+ * live unread counts (new messages arrive over the WebSocket). */
 export function ConversationListView() {
-  const { conversations, getUnreadCount } = useChatStore();
-  const [isLoading, setIsLoading] = useState(true);
+  const { conversations, status, error, refresh, getUnreadCount } = useChatStore();
 
   useEffect(() => {
-    const timeout = setTimeout(() => setIsLoading(false), 400);
-    return () => clearTimeout(timeout);
-  }, []);
+    void refresh();
+  }, [refresh]);
 
-  const sorted = [...conversations].sort((a, b) => {
-    const aTime = a.messages[a.messages.length - 1]?.createdAt ?? "";
-    const bTime = b.messages[b.messages.length - 1]?.createdAt ?? "";
-    return new Date(bTime).getTime() - new Date(aTime).getTime();
-  });
+  const sorted = [...conversations].sort(
+    (a, b) => new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime(),
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -36,8 +32,18 @@ export function ConversationListView() {
         </p>
       </div>
 
-      {isLoading ? (
-        <LoadingState message="Connecting to your conversations…" />
+      {(status === "idle" || status === "loading") && sorted.length === 0 ? (
+        <LoadingState message="Loading your conversations…" />
+      ) : status === "error" && sorted.length === 0 ? (
+        <ErrorState
+          title="We couldn't load your chats"
+          description={error ?? undefined}
+          action={
+            <Button variant="secondary" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          }
+        />
       ) : sorted.length === 0 ? (
         <EmptyState
           icon="message-circle"

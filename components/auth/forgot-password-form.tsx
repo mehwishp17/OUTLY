@@ -7,18 +7,16 @@ import { AuthMessage } from "@/components/auth/auth-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { mockPasswordReset } from "@/lib/mock/mock-auth";
+import { requestPasswordReset } from "@/lib/api/auth";
 import { validateForgotPasswordForm } from "@/lib/validation/auth-schemas";
 import type { AuthStatus, ForgotPasswordErrors, ForgotPasswordValues } from "@/types/auth";
 
 const INITIAL_VALUES: ForgotPasswordValues = { email: "" };
 
 /**
- * Password recovery form. Always resolves to a generic success message
- * (mocked, via `mockPasswordReset`) regardless of whether the email
- * "exists" — there is no account data to check, and this also matches
- * the security-conscious pattern a real implementation should follow
- * (never reveal whether an email is registered).
+ * Password recovery form. The backend emails a reset link and always answers
+ * with the same generic message, whether or not the email is registered —
+ * it never reveals which emails have accounts.
  */
 export function ForgotPasswordForm() {
   const [values, setValues] = useState<ForgotPasswordValues>(INITIAL_VALUES);
@@ -36,20 +34,17 @@ export function ForgotPasswordForm() {
     }
 
     setStatus("loading");
-    const result = await mockPasswordReset(values);
+    const result = await requestPasswordReset(values.email);
     setStatus(result.success ? "success" : "error");
     setMessage(result.message);
   }
 
   if (status === "success") {
     return (
-      <AuthFormCard eyebrow="Explore · Connect · Belong" title="Reset your password">
-        <AuthMessage variant="success" title="Check your inbox (mocked)">
+      <AuthFormCard icon="check-circle" title="Check your email">
+        <AuthMessage variant="success" title="Check your inbox">
           {message}
         </AuthMessage>
-        <Button href="/reset-password" className="mt-6 w-full" size="lg">
-          Continue to reset password (preview)
-        </Button>
         <AuthLinks prompt="Remembered it after all?" linkLabel="Back to login" href="/login" />
       </AuthFormCard>
     );
@@ -57,9 +52,9 @@ export function ForgotPasswordForm() {
 
   return (
     <AuthFormCard
-      eyebrow="Explore · Connect · Belong"
-      title="Reset your password"
-      description="Enter your email and we'll show you what happens next."
+      icon="lock"
+      title="Forgot your password?"
+      description="No problem. Enter the email you signed up with and we'll send you a link to choose a new one."
     >
       <form noValidate onSubmit={handleSubmit} className="space-y-5">
         {status === "error" ? (
@@ -78,6 +73,7 @@ export function ForgotPasswordForm() {
           onChange={(event) => setValues({ email: event.target.value })}
           error={errors.email}
           placeholder="you@example.com"
+          className="py-3 shadow-none"
         />
 
         <Button type="submit" size="lg" className="w-full" disabled={status === "loading"}>

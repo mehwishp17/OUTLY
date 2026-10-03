@@ -109,13 +109,25 @@ TEMPLATES = [
     }
 ]
 
+# Database. Under ASGI (Daphne/Uvicorn - needed for WebSockets) Django serves each
+# request on its own thread, so per-thread persistent connections (CONN_MAX_AGE)
+# would pile up until Postgres refuses new clients. A psycopg connection pool
+# shares a bounded set of connections instead (DB_POOL=false restores
+# CONN_MAX_AGE for a classic sync-WSGI deployment).
+DB_POOL = env_bool("DB_POOL", True)
 DATABASES = {
     "default": dj_database_url.parse(
         env("DATABASE_URL", "postgres://outly:outly_dev_password@127.0.0.1:5433/outly"),
-        conn_max_age=int(env("DB_CONN_MAX_AGE", "60")),
-        conn_health_checks=True,
+        conn_max_age=0 if DB_POOL else int(env("DB_CONN_MAX_AGE", "60")),
+        conn_health_checks=not DB_POOL,
     )
 }
+if DB_POOL:
+    DATABASES["default"].setdefault("OPTIONS", {})["pool"] = {
+        "min_size": int(env("DB_POOL_MIN", "2")),
+        "max_size": int(env("DB_POOL_MAX", "10")),
+        "timeout": 10,
+    }
 
 AUTH_USER_MODEL = "accounts.User"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

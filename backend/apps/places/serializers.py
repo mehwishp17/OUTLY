@@ -95,7 +95,7 @@ class TrailSerializer(_Base):
     class Meta:
         model = Trail
         fields = [
-            "id", "name", "description", "location", "place_id", "start", "start_latitude", "start_longitude",
+            "id", "name", "description", "location", "category", "place_id", "start", "start_latitude", "start_longitude",
             "difficulty", "distance", "elevation_gain_m", "estimated_duration_minutes", "estimated_duration",
             "duration_label", "facilities", "safety_notes", "images", "rating", "reviews_count", "is_verified",
             "distance_from_km", "is_saved", "points_count", "points", "created_at", "updated_at",

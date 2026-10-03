@@ -21,6 +21,7 @@ export function CoverImage({ src, sizes, position = "center", className }: Cover
         fill
         sizes={sizes}
         quality={100}
+        unoptimized={src.startsWith("http")}
         style={{ objectPosition: position }}
         className={cn(
           "object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100",

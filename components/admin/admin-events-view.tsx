@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { Button } from "@/components/ui/button";
-import { useAdminStore } from "@/context/admin-store-context";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useEventStore } from "@/context/event-store-context";
+import { moderateEventRequest } from "@/lib/api/admin";
 import { EVENT_CATEGORY_LABELS } from "@/types/event";
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -13,20 +16,36 @@ const STATUS_CLASSES: Record<string, string> = {
   cancelled: "bg-[#fbe1e8] text-[#b3164c]",
 };
 
-/** Admin Events: every event, reusing `cancelEvent` from
- * `event-store-context` (the same action the organizer's own dropdown
- * uses) rather than a parallel admin-only cancellation path. */
+/** Admin Events (moderators): every event on the platform. Moderators can
+ * approve or reject events waiting for approval and cancel upcoming ones,
+ * reusing `cancelEvent` from `event-store-context` (the action the
+ * organizer's own menu uses). */
 export function AdminEventsView() {
-  const { events, cancelEvent } = useEventStore();
-  const { logAction } = useAdminStore();
+  const { events, status, error, refresh, cancelEvent, loadEvent } = useEventStore();
+  const [actionError, setActionError] = useState<string>();
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const sorted = [...events].sort(
     (a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime(),
   );
 
-  function handleCancel(eventId: string, title: string) {
-    cancelEvent(eventId);
-    logAction("event_cancelled", title);
+  async function handleCancel(eventId: string) {
+    setActionError(undefined);
+    const failure = await cancelEvent(eventId);
+    if (failure) setActionError(failure);
+  }
+
+  async function handleModerate(eventId: string, approve: boolean) {
+    setActionError(undefined);
+    const result = await moderateEventRequest(eventId, approve);
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    await loadEvent(eventId);
   }
 
   return (
@@ -40,9 +59,20 @@ export function AdminEventsView() {
 
       <AdminNav active="/admin/events" />
 
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
+      {status === "loading" && events.length === 0 ? (
+        <LoadingState message="Loading events…" />
+      ) : status === "error" && events.length === 0 ? (
+        <ErrorState title="We couldn't load events" description={error?.message} />
+      ) : (
       <ul className="flex flex-col gap-2">
         {sorted.map((event) => {
-          const goingCount = event.participants.filter((p) => p.status === "going").length;
+          const goingCount = event.goingCount;
           return (
             <li
               key={event.id}
@@ -66,8 +96,17 @@ export function AdminEventsView() {
                 </p>
               </div>
 
-              {event.status === "upcoming" ? (
-                <Button size="md" variant="secondary" onClick={() => handleCancel(event.id, event.title)}>
+              {event.approvalStatus === "pending" ? (
+                <div className="flex gap-2">
+                  <Button size="md" onClick={() => handleModerate(event.id, true)}>
+                    Approve
+                  </Button>
+                  <Button size="md" variant="secondary" onClick={() => handleModerate(event.id, false)}>
+                    Reject
+                  </Button>
+                </div>
+              ) : event.status === "upcoming" ? (
+                <Button size="md" variant="secondary" onClick={() => handleCancel(event.id)}>
                   Cancel event
                 </Button>
               ) : null}
@@ -75,6 +114,7 @@ export function AdminEventsView() {
           );
         })}
       </ul>
+      )}
     </div>
   );
 }

@@ -1,25 +1,62 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useAdminStore } from "@/context/admin-store-context";
-import { useFollowStore } from "@/context/follow-store-context";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useSocialStore } from "@/context/social-store-context";
-import { MOCK_OTHER_USERS } from "@/lib/mock/mock-users";
+import { fetchAdminUsers, setUserStatusRequest } from "@/lib/api/admin";
+import type { AdminUser } from "@/lib/api/admin";
 import { resolveUserSummary } from "@/lib/user-directory";
 
-/** Admin Users: every known user, with follower counts (reused from the
- * Social Graph module) and a suspend/reinstate action. */
+/** Admin Users (administrators): every account with its role, and a
+ * suspend/reinstate action. Suspending signs the person out everywhere. */
 export function AdminUsersView() {
   const { currentUser } = useSocialStore();
-  const { getFollowerIds } = useFollowStore();
-  const { isUserSuspended, suspendUser, reinstateUser } = useAdminStore();
+  const [accounts, setAccounts] = useState<AdminUser[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
 
-  const users = [currentUser.id, ...MOCK_OTHER_USERS.map((user) => user.id)]
-    .map((id) => resolveUserSummary(id, currentUser))
-    .filter((user) => user !== undefined);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((key) => key + 1);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAdminUsers("").then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setAccounts(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  async function toggleSuspended(user: AdminUser, suspend: boolean) {
+    setActionError(undefined);
+    const result = await setUserStatusRequest(user.id, suspend ? "SUSPENDED" : "ACTIVE");
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    reload();
+  }
+
+  const users = accounts.map((account) => ({
+    ...account,
+    avatarUrl: resolveUserSummary(account.id, currentUser)?.avatarUrl,
+    isCurrentUser: account.id === currentUser.id,
+    suspended: account.status === "SUSPENDED",
+  }));
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -34,9 +71,20 @@ export function AdminUsersView() {
 
       <AdminNav active="/admin/users" />
 
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
+      {status === "loading" ? (
+        <LoadingState message="Loading accounts…" />
+      ) : status === "error" ? (
+        <ErrorState title="We couldn't load accounts" description={error} />
+      ) : (
       <ul className="flex flex-col gap-2">
         {users.map((user) => {
-          const suspended = isUserSuspended(user.id);
+          const suspended = user.suspended;
           return (
             <li
               key={user.id}
@@ -52,7 +100,7 @@ export function AdminUsersView() {
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-[var(--outly-muted)]">
-                    @{user.username} · {getFollowerIds(user.id).length} followers
+                    @{user.username} · {user.role.toLowerCase().replace("_", " ")}
                   </p>
                 </div>
               </Link>
@@ -67,9 +115,7 @@ export function AdminUsersView() {
                 <Button
                   size="md"
                   variant="secondary"
-                  onClick={() =>
-                    suspended ? reinstateUser(user.id, user.name) : suspendUser(user.id, user.name)
-                  }
+                  onClick={() => toggleSuspended(user, !suspended)}
                 >
                   {suspended ? "Reinstate" : "Suspend"}
                 </Button>
@@ -78,6 +124,7 @@ export function AdminUsersView() {
           );
         })}
       </ul>
+      )}
     </div>
   );
 }

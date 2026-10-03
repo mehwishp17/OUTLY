@@ -1,20 +1,58 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
 import { StarRating } from "@/components/explore/star-rating";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
-import { useAdminStore } from "@/context/admin-store-context";
-import { MOCK_PLACES } from "@/lib/mock/mock-places";
+import { LoadingState } from "@/components/ui/loading-state";
+import { setPlaceVerifiedRequest } from "@/lib/api/admin";
+import { fetchExplore } from "@/lib/api/places";
 import { PLACE_CATEGORY_LABELS } from "@/types/place";
+import type { ExplorePlace } from "@/types/place";
 
-/** Admin Places: every place and trail from the Explore module, with a
- * verification toggle — reuses `DifficultyBadge`/`StarRating` from
- * Explore rather than duplicating that presentation. */
+/** Admin Places (administrators): every place and trail from the Explore
+ * module, with a verification toggle — reuses `DifficultyBadge`/`StarRating`
+ * from Explore rather than duplicating that presentation. */
 export function AdminPlacesView() {
-  const { isPlaceVerified, setPlaceVerified } = useAdminStore();
+  const [places, setPlaces] = useState<ExplorePlace[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchExplore().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setPlaces(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleVerified(place: ExplorePlace, verified: boolean) {
+    setActionError(undefined);
+    const result = await setPlaceVerifiedRequest(place.kind, place.id, verified);
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    setPlaces((current) =>
+      current.map((candidate) =>
+        candidate.id === place.id && candidate.kind === place.kind ? { ...candidate, verified } : candidate,
+      ),
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -29,9 +67,20 @@ export function AdminPlacesView() {
 
       <AdminNav active="/admin/places" />
 
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
+      {status === "loading" ? (
+        <LoadingState message="Loading places…" />
+      ) : status === "error" ? (
+        <ErrorState title="We couldn't load places" description={error} />
+      ) : (
       <ul className="flex flex-col gap-2">
-        {MOCK_PLACES.map((place) => {
-          const verified = isPlaceVerified(place.id, place.verified);
+        {places.map((place) => {
+          const verified = place.verified;
           const detailHref = place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
 
           return (
@@ -62,7 +111,7 @@ export function AdminPlacesView() {
                   {PLACE_CATEGORY_LABELS[place.category]} · {place.location}
                 </p>
                 <div className="mt-1 flex items-center gap-2">
-                  <DifficultyBadge difficulty={place.difficulty} />
+                  {place.difficulty ? <DifficultyBadge difficulty={place.difficulty} /> : null}
                   <StarRating rating={place.rating} reviewCount={place.reviewCount} />
                 </div>
               </div>
@@ -70,7 +119,7 @@ export function AdminPlacesView() {
               <Button
                 size="md"
                 variant="secondary"
-                onClick={() => setPlaceVerified(place.id, place.name, !verified)}
+                onClick={() => toggleVerified(place, !verified)}
               >
                 {verified ? "Remove verification" : "Mark verified"}
               </Button>
@@ -78,6 +127,7 @@ export function AdminPlacesView() {
           );
         })}
       </ul>
+      )}
     </div>
   );
 }

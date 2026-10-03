@@ -28,17 +28,17 @@ export function ProfileHeader({ name, username, avatarUrl, location, skillLevel 
   return (
     <section className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white shadow-[var(--shadow-soft)]">
       <div className="group relative h-28 w-full overflow-hidden gradient-brand sm:h-36" aria-hidden="true">
-        <CoverImage src={ADVENTURE_IMAGES.profileCover} sizes="(min-width: 1024px) 900px, 100vw" position="center 60%" />
+        <CoverImage src={ADVENTURE_IMAGES.profileCover} sizes="(min-width: 1024px) 900px, 100vw" position="center 58%" />
       </div>
-      <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:justify-between sm:px-8">
-        <div className="-mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-5">
+      <div className="relative flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:justify-between sm:px-8">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:gap-5">
           <Avatar
             name={name}
             avatarUrl={avatarUrl}
             size="xl"
-            className="border-4 border-white shadow-[var(--shadow-elevated)]"
+            className="-mt-10 shrink-0 border-4 border-white shadow-[var(--shadow-elevated)]"
           />
-          <div className="pt-2 sm:pb-1">
+          <div className="sm:pt-3">
             <h1 className="text-xl font-bold text-[var(--outly-ink)] sm:text-2xl">{name}</h1>
             <p className="text-sm font-medium text-[var(--outly-muted)]">@{username}</p>
             {location ? (

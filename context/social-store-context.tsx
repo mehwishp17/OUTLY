@@ -1,154 +1,245 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import type { Comment, Post, CreatePostInput, EditPostInput } from "@/types/post";
-import type { EditProfileValues, PrivacySettings, SavedPlace, UserProfile } from "@/types/profile";
+import type { Comment, Post } from "@/types/post";
+import type { CompletedActivity, EditProfileValues, PrivacySettings, SavedPlace, UserProfile } from "@/types/profile";
+import type { ExplorePlace } from "@/types/place";
+import type { OnboardingData } from "@/types/onboarding";
+import { fetchCompletedActivities } from "@/lib/api/activities";
 import {
   addCommentRequest,
   createPostRequest,
+  deleteCommentRequest,
   deletePostRequest,
+  editCommentRequest,
   editPostRequest,
+  likeRequest,
   loadFeed,
+  loadGroupFeed,
+  loadPost,
+  saveRequest,
+  uploadPostImage,
 } from "@/lib/api/feed";
-import type { AuthorMap } from "@/lib/api/feed";
+import { fetchMyGroupNames } from "@/lib/api/groups";
+import { fetchSavedExplore, savedFromPlace, setExploreSaved } from "@/lib/api/places";
 import {
   fetchMyProfile,
   patchMyProfile,
   profileInterests,
   profileName,
   profilePhoto,
+  rememberBackendUser,
+  removeMyAvatar,
+  uploadMyAvatar,
 } from "@/lib/api/profile";
 import type { MyProfile } from "@/lib/api/profile";
-import { MOCK_POSTS } from "@/lib/mock/mock-posts";
-import { MOCK_USER } from "@/lib/mock/mock-user";
-import {
-  addCommentToPost,
-  applyEditToPost,
-  buildNewComment,
-  buildNewPost,
-  editCommentOnPost,
-  removeCommentFromPost,
-  setPostHidden as applyPostHidden,
-  syncSavedPlaceForPost,
-  toggleLikeOnPost,
-  toggleSaveOnPost,
-  toggleSavedPlaceEntry,
-} from "@/lib/mock/mock-social-store";
+import { clearUserDirectory, getUserDirectoryVersion, subscribeUserDirectory } from "@/lib/user-directory";
 
 export type FeedStatus = "idle" | "loading" | "ready" | "error";
 
 /** Public routes never need the signed-in user, so nothing is fetched there. */
 const PUBLIC_PATHS = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/verify-email"];
 
+type LoadError = { message: string; status: number };
+
+/** Photos chosen in the post composer: `url` is the local preview, `file` is what gets uploaded. */
+export type PostImageFile = { url: string; file: File };
+
+export type PostValues = {
+  content: string;
+  location?: string;
+  /** Image URLs left on the post (existing http URLs + new local previews), in order. */
+  images?: string[];
+  /** The new local images that need uploading. */
+  files?: PostImageFile[];
+  groupId?: string;
+};
+
 type SocialStoreValue = {
   /**
-   * The signed-in user. `id`, `name`, `username`, `avatarUrl`, `bio` and
-   * `interests` come from the OUTLY backend (`GET /users/me`) once loaded
-   * (blank until then). `id` stays the mock id because the Events, Groups,
-   * Activities, Partner and Chat modules are still mock data keyed by it;
-   * `viewerId` is the real backend id. The remaining fields (location, skill
-   * level, joined communities, saved places, completed activities, privacy)
-   * have no backend support yet and are still the local mock values.
+   * The signed-in user. Everything comes from the OUTLY backend: the profile
+   * (`GET /users/me`), saved places, completed activities and joined groups.
+   * `id` is the backend user id ("" until the profile has loaded).
    */
   currentUser: UserProfile;
   /** Whether the signed-in user's profile has loaded from the backend. */
   currentUserStatus: FeedStatus;
   /** Clears the signed-in user's data; call on log out and after logging in. */
   resetSession: () => void;
+  /** Reloads saved places, activity history and joined groups (call after those change elsewhere). */
+  refreshProfileExtras: () => Promise<void>;
   posts: Post[];
-  /** Backend user id of the signed-in account (null until the feed loads). */
+  /** Backend user id of the signed-in account (null until the profile loads). */
   viewerId: string | null;
-  /** True if `userId` is the signed-in user, whether a mock id or backend id. */
   isCurrentUser: (userId: string) => boolean;
   feedStatus: FeedStatus;
-  feedError: { message: string; status: number } | null;
+  feedError: LoadError | null;
   /** Re-fetches the Home Feed (posts + comments) from the backend. */
   refreshFeed: () => Promise<void>;
   /** Loads the Home Feed once; no-op while loaded or loading. */
   ensureFeedLoaded: () => Promise<void>;
-  /** Backend-persisted post/comment actions. Each resolves with an error
-   * message on failure, so the UI never shows a change the backend rejected. */
-  createBackendPost: (caption: string) => Promise<{ post?: Post; error?: string }>;
-  editBackendPost: (postId: string, caption: string) => Promise<string | undefined>;
-  deleteBackendPost: (postId: string) => Promise<string | undefined>;
-  addBackendComment: (postId: string, content: string) => Promise<string | undefined>;
+  /** Loads one post by id (for links to a post that is not in the feed). */
+  loadPostById: (postId: string) => Promise<LoadError | null>;
+  /** Loads a group's own feed into `posts` (filter by `groupId`). */
+  loadGroupPosts: (groupId: string) => Promise<LoadError | null>;
   getPostById: (postId: string) => Post | undefined;
-  createPost: (input: CreatePostInput) => Post;
-  editPost: (postId: string, input: EditPostInput) => void;
-  deletePost: (postId: string) => void;
-  setPostHidden: (postId: string, hidden: boolean) => void;
+  /** Every action resolves with an error message on failure, so the UI
+   * never shows a change the backend rejected. */
+  createPost: (values: PostValues) => Promise<{ post?: Post; error?: string }>;
+  editPost: (postId: string, values: PostValues) => Promise<string | undefined>;
+  deletePost: (postId: string) => Promise<string | undefined>;
+  /** Optimistic: the UI updates at once and rolls back if the backend refuses. */
   toggleLike: (postId: string) => void;
   toggleSave: (postId: string) => void;
-  addComment: (postId: string, content: string) => void;
-  editComment: (postId: string, commentId: string, content: string) => void;
-  deleteComment: (postId: string, commentId: string) => void;
-  /** Saves name/username/bio/interests to the backend; resolves with an error message on failure. */
+  addComment: (postId: string, content: string) => Promise<string | undefined>;
+  editComment: (postId: string, commentId: string, content: string) => Promise<string | undefined>;
+  deleteComment: (postId: string, commentId: string) => Promise<string | undefined>;
+  /** Saves name/username/bio/interests/location/skill level; resolves with an error message on failure. */
   updateProfile: (values: EditProfileValues) => Promise<string | undefined>;
-  updateAvatar: (avatarUrl: string | undefined) => void;
-  updatePrivacySettings: (settings: PrivacySettings) => void;
-  removeSavedPlace: (placeId: string) => void;
-  isPlaceSaved: (placeId: string) => boolean;
-  toggleSavePlace: (place: SavedPlace) => void;
+  /** Uploads `file` as the new avatar, or removes the avatar when `avatarUrl` is undefined. */
+  updateAvatar: (avatarUrl: string | undefined, file?: File) => Promise<string | undefined>;
+  updatePrivacySettings: (settings: PrivacySettings) => Promise<string | undefined>;
+  /** Saves what the person chose during onboarding (interests, level, location). */
+  saveOnboarding: (data: OnboardingData) => Promise<string | undefined>;
+  /** Saved places are keyed by `exploreKey` ("place-3" / "trail-5"). */
+  removeSavedPlace: (key: string) => void;
+  isPlaceSaved: (key: string) => boolean;
+  toggleSavePlace: (place: ExplorePlace) => void;
 };
 
 const SocialStoreContext = createContext<SocialStoreValue | null>(null);
 
-/**
- * Profile and social state. The Home Feed (`Post.persisted`) is loaded from
- * and saved to the OUTLY backend through the `*Backend*` actions and
- * `lib/api/feed.ts`. Everything else here (group posts, likes, saves, the
- * profile, saved places) is still session-only mock state that resets on
- * reload; docs/feed-integration.md lists exactly which Feed features are
- * still local-only.
- */
+const BLANK_USER: UserProfile = {
+  id: "",
+  name: "",
+  username: "",
+  avatarUrl: undefined,
+  location: undefined,
+  bio: undefined,
+  interests: [],
+  skillLevel: "beginner",
+  joinedCommunities: [],
+  savedPlaces: [],
+  completedActivities: [],
+  privacy: { profileVisibility: "public", showActivityHistory: true, showSavedPlaces: true },
+};
+
+/** Uploads each new photo; returns the media ids in order, or the first error. */
+async function uploadFiles(files: PostImageFile[]): Promise<{ ids: number[]; error?: string }> {
+  const ids: number[] = [];
+  for (const { file } of files) {
+    const uploaded = await uploadPostImage(file);
+    if (!uploaded.ok) return { ids, error: uploaded.message };
+    ids.push(uploaded.data.id);
+  }
+  return { ids };
+}
+
+/** Saved places, completed activities and joined groups, loaded together. */
+async function loadProfileExtras() {
+  const [saved, history, groups] = await Promise.all([
+    fetchSavedExplore(),
+    fetchCompletedActivities(),
+    fetchMyGroupNames(),
+  ]);
+  return { saved, history, groups };
+}
+
+function replacePost(posts: Post[], postId: string, change: (post: Post) => Post): Post[] {
+  return posts.map((post) => (post.id === postId ? change(post) : post));
+}
+
 export function SocialStoreProvider({ children }: { children: ReactNode }) {
-  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
-  const [localUser, setLocalUser] = useState<UserProfile>(MOCK_USER);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const postsRef = useRef<Post[]>([]);
   const [me, setMe] = useState<MyProfile | null>(null);
   const [meStatus, setMeStatus] = useState<FeedStatus>("idle");
   const meStatusRef = useRef<FeedStatus>("idle");
   const meRef = useRef<MyProfile | null>(null);
-  const meInflightRef = useRef<Promise<{ profile?: MyProfile; error?: { message: string; status: number } }> | null>(null);
-  const viewerId = me ? String(me.user_id) : null;
-
-  const currentUser = useMemo<UserProfile>(
-    () => ({
-      ...localUser,
-      name: me ? profileName(me) : "",
-      username: me?.username ?? "",
-      avatarUrl: localUser.avatarUrl ?? (me ? profilePhoto(me) : undefined),
-      bio: me?.bio || undefined,
-      interests: me ? profileInterests(me) : [],
-    }),
-    [localUser, me],
-  );
+  const meInflightRef = useRef<Promise<{ profile?: MyProfile; error?: LoadError }> | null>(null);
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
+  const [completedActivities, setCompletedActivities] = useState<CompletedActivity[]>([]);
+  const [joinedCommunities, setJoinedCommunities] = useState<string[]>([]);
   const [feedStatus, setFeedStatus] = useState<FeedStatus>("idle");
-  const [feedError, setFeedError] = useState<{ message: string; status: number } | null>(null);
-  const authorsRef = useRef<AuthorMap>({});
+  const [feedError, setFeedError] = useState<LoadError | null>(null);
   const feedStatusRef = useRef<FeedStatus>("idle");
   const inflightRef = useRef<Promise<void> | null>(null);
+  // Re-render consumers whenever the shared user directory learns about someone.
+  const directoryVersion = useSyncExternalStore(subscribeUserDirectory, getUserDirectoryVersion, () => 0);
 
-  const isCurrentUser = useCallback(
-    (userId: string) => userId === currentUser.id || userId === viewerId,
-    [currentUser.id, viewerId],
-  );
+  const viewerId = me ? String(me.user_id) : null;
+
+  const setPostList = useCallback((updater: (current: Post[]) => Post[]) => {
+    const next = updater(postsRef.current);
+    postsRef.current = next;
+    setPosts(next);
+  }, []);
+
+  const currentUser = useMemo<UserProfile>(() => {
+    if (!me) return { ...BLANK_USER, savedPlaces, completedActivities, joinedCommunities };
+    const privacy = me.privacy_settings ?? {};
+    return {
+      id: String(me.user_id),
+      role: me.role,
+      name: profileName(me),
+      username: me.username,
+      avatarUrl: profilePhoto(me),
+      location: me.location || undefined,
+      bio: me.bio || undefined,
+      interests: profileInterests(me),
+      skillLevel: me.skill_level ?? "beginner",
+      joinedCommunities,
+      savedPlaces,
+      completedActivities,
+      privacy: {
+        profileVisibility: privacy.profileVisibility ?? "public",
+        showActivityHistory: privacy.showActivityHistory ?? true,
+        showSavedPlaces: privacy.showSavedPlaces ?? true,
+      },
+    };
+  }, [me, savedPlaces, completedActivities, joinedCommunities]);
+
+  const isCurrentUser = useCallback((userId: string) => Boolean(viewerId) && userId === viewerId, [viewerId]);
 
   const setMeState = useCallback((status: FeedStatus) => {
     meStatusRef.current = status;
     setMeStatus(status);
   }, []);
 
+  const applyMe = useCallback((profile: MyProfile) => {
+    meRef.current = profile;
+    setMe(profile);
+    rememberBackendUser({
+      user_id: profile.user_id,
+      username: profile.username,
+      display_name: profile.display_name,
+      photo: profile.photo ?? null,
+      bio: profile.bio,
+      location: profile.location,
+      interests: profile.interests,
+      skill_level: profile.skill_level,
+    });
+  }, []);
+
   /** Single place the signed-in user is fetched; concurrent callers share one request. */
-  const loadMe = useCallback((): Promise<{ profile?: MyProfile; error?: { message: string; status: number } }> => {
+  const loadMe = useCallback((): Promise<{ profile?: MyProfile; error?: LoadError }> => {
     if (meInflightRef.current) return meInflightRef.current;
     meInflightRef.current = (async () => {
       setMeState("loading");
       const result = await fetchMyProfile();
       if (result.ok) {
-        meRef.current = result.data;
-        setMe(result.data);
+        applyMe(result.data);
         setMeState("ready");
         return { profile: result.data };
       }
@@ -158,7 +249,14 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
       meInflightRef.current = null;
     });
     return meInflightRef.current;
-  }, [setMeState]);
+  }, [setMeState, applyMe]);
+
+  const refreshProfileExtras = useCallback(async () => {
+    const extras = await loadProfileExtras();
+    if (extras.saved.ok) setSavedPlaces(extras.saved.data);
+    if (extras.history.ok) setCompletedActivities(extras.history.data);
+    if (extras.groups.ok) setJoinedCommunities(extras.groups.data);
+  }, []);
 
   const setStatus = useCallback((status: FeedStatus) => {
     feedStatusRef.current = status;
@@ -170,32 +268,21 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
     inflightRef.current = (async () => {
       // Keep showing the loaded feed while refreshing in the background.
       if (feedStatusRef.current !== "ready") setStatus("loading");
-      const mine = meRef.current ? { profile: meRef.current } : await loadMe();
-      if (!mine.profile) {
-        setFeedError(mine.error ?? { message: "We couldn't load your profile.", status: 0 });
-        setStatus("error");
-        return;
+      if (!meRef.current) {
+        const mine = await loadMe();
+        if (!mine.profile) {
+          setFeedError(mine.error ?? { message: "We couldn't load your profile.", status: 0 });
+          setStatus("error");
+          return;
+        }
       }
-      const result = await loadFeed(mine.profile);
+      const result = await loadFeed();
       if (result.ok) {
-        authorsRef.current = result.data.authors;
         setFeedError(null);
-        setPosts((current) => {
-          // Likes and saves are LOCAL-ONLY (the backend has no endpoints for
-          // them), so carry them over from the previous copy of each post.
-          const previous = new Map(current.filter((p) => p.persisted).map((p) => [p.id, p]));
-          const backendPosts = result.data.posts.map((post) => {
-            const before = previous.get(post.id);
-            return before
-              ? {
-                  ...post,
-                  likeCount: before.likeCount,
-                  likedByCurrentUser: before.likedByCurrentUser,
-                  savedByCurrentUser: before.savedByCurrentUser,
-                }
-              : post;
-          });
-          return [...backendPosts, ...current.filter((p) => !p.persisted)];
+        setPostList((current) => {
+          const fresh = new Set(result.data.map((post) => post.id));
+          // Keep posts that came from elsewhere (a group feed, a direct link).
+          return [...result.data, ...current.filter((post) => !fresh.has(post.id))];
         });
         setStatus("ready");
       } else {
@@ -206,180 +293,239 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
       inflightRef.current = null;
     });
     return inflightRef.current;
-  }, [setStatus, loadMe]);
+  }, [setStatus, loadMe, setPostList]);
 
   const ensureFeedLoaded = useCallback(async () => {
     if (feedStatusRef.current === "idle" || feedStatusRef.current === "error") await refreshFeed();
   }, [refreshFeed]);
 
-  const createBackendPost = useCallback(
-    async (caption: string) => {
-      await ensureFeedLoaded();
-      const result = await createPostRequest(caption, authorsRef.current);
-      if (!result.ok) return { error: result.message };
-      setPosts((current) => [result.data, ...current]);
-      return { post: result.data };
+  const loadPostById = useCallback(
+    async (postId: string): Promise<LoadError | null> => {
+      if (postsRef.current.some((post) => post.id === postId)) return null;
+      const result = await loadPost(postId);
+      if (!result.ok) return { message: result.message, status: result.status };
+      setPostList((current) => (current.some((post) => post.id === postId) ? current : [...current, result.data]));
+      return null;
     },
-    [ensureFeedLoaded],
+    [setPostList],
   );
 
-  const editBackendPost = useCallback(async (postId: string, caption: string) => {
-    const result = await editPostRequest(postId, caption);
-    if (!result.ok) return result.message;
-    setPosts((current) =>
-      current.map((post) =>
-        post.id === postId
-          ? { ...post, content: result.data.caption, updatedAt: result.data.updatedAt }
-          : post,
-      ),
-    );
-    return undefined;
-  }, []);
-
-  const deleteBackendPost = useCallback(async (postId: string) => {
-    const result = await deletePostRequest(postId);
-    if (!result.ok) return result.message;
-    setPosts((current) => current.filter((post) => post.id !== postId));
-    return undefined;
-  }, []);
-
-  const addBackendComment = useCallback(async (postId: string, content: string) => {
-    const result = await addCommentRequest(postId, content.trim(), authorsRef.current);
-    if (!result.ok) return result.message;
-    const comment: Comment = result.data;
-    setPosts((current) =>
-      current.map((post) =>
-        post.id === postId ? { ...post, comments: [...post.comments, comment] } : post,
-      ),
-    );
-    return undefined;
-  }, []);
-
-  const getPostById = useCallback(
-    (postId: string) => posts.find((post) => post.id === postId),
-    [posts],
+  const loadGroupPosts = useCallback(
+    async (groupId: string): Promise<LoadError | null> => {
+      const result = await loadGroupFeed(groupId);
+      if (!result.ok) return { message: result.message, status: result.status };
+      setPostList((current) => {
+        const fresh = new Set(result.data.map((post) => post.id));
+        return [...result.data, ...current.filter((post) => !fresh.has(post.id) && post.groupId !== groupId)];
+      });
+      return null;
+    },
+    [setPostList],
   );
+
+  const getPostById = useCallback((postId: string) => posts.find((post) => post.id === postId), [posts]);
 
   const createPost = useCallback(
-    (input: CreatePostInput) => {
-      const newPost = buildNewPost(input, currentUser);
-      setPosts((current) => [newPost, ...current]);
-      return newPost;
+    async (values: PostValues) => {
+      const uploaded = await uploadFiles(values.files ?? []);
+      if (uploaded.error) return { error: uploaded.error };
+      const result = await createPostRequest({
+        caption: values.content,
+        location: values.location,
+        mediaIds: uploaded.ids,
+        groupId: values.groupId,
+      });
+      if (!result.ok) return { error: result.message };
+      setPostList((current) => [result.data, ...current]);
+      return { post: result.data };
     },
-    [currentUser],
+    [setPostList],
   );
 
-  const editPost = useCallback((postId: string, input: EditPostInput) => {
-    setPosts((current) =>
-      current.map((post) => (post.id === postId ? applyEditToPost(post, input) : post)),
-    );
-  }, []);
+  const editPost = useCallback(
+    async (postId: string, values: PostValues) => {
+      const existing = postsRef.current.find((post) => post.id === postId);
+      const uploaded = await uploadFiles(values.files ?? []);
+      if (uploaded.error) return uploaded.error;
+      // Keep the post's current photos that are still listed, then add the new ones.
+      const keptIds = (existing?.mediaIds ?? []).filter((_, index) => values.images?.includes(existing?.images?.[index] ?? ""));
+      const result = await editPostRequest(postId, {
+        caption: values.content,
+        location: values.location,
+        mediaIds: [...keptIds, ...uploaded.ids],
+      });
+      if (!result.ok) return result.message;
+      setPostList((current) => replacePost(current, postId, (post) => ({ ...result.data, comments: post.comments })));
+      return undefined;
+    },
+    [setPostList],
+  );
 
-  const deletePost = useCallback((postId: string) => {
-    setPosts((current) => current.filter((post) => post.id !== postId));
-  }, []);
+  const deletePost = useCallback(
+    async (postId: string) => {
+      const result = await deletePostRequest(postId);
+      if (!result.ok) return result.message;
+      setPostList((current) => current.filter((post) => post.id !== postId));
+      return undefined;
+    },
+    [setPostList],
+  );
 
-  const setPostHidden = useCallback((postId: string, hidden: boolean) => {
-    setPosts((current) =>
-      current.map((post) => (post.id === postId ? applyPostHidden(post, hidden) : post)),
-    );
-  }, []);
+  const toggleLike = useCallback(
+    (postId: string) => {
+      const post = postsRef.current.find((candidate) => candidate.id === postId);
+      if (!post) return;
+      const liking = !post.likedByCurrentUser;
+      const apply = (liked: boolean, count: number) =>
+        setPostList((current) =>
+          replacePost(current, postId, (p) => ({ ...p, likedByCurrentUser: liked, likeCount: Math.max(0, count) })),
+        );
+      apply(liking, post.likeCount + (liking ? 1 : -1));
+      void likeRequest(postId, liking).then((result) => {
+        if (!result.ok) apply(post.likedByCurrentUser, post.likeCount); // roll back
+        else apply(liking, result.data.likes_count);
+      });
+    },
+    [setPostList],
+  );
 
-  const toggleLike = useCallback((postId: string) => {
-    setPosts((current) =>
-      current.map((post) => (post.id === postId ? toggleLikeOnPost(post) : post)),
-    );
-  }, []);
-
-  const toggleSave = useCallback((postId: string) => {
-    setPosts((current) => {
-      const updated = current.map((post) => (post.id === postId ? toggleSaveOnPost(post) : post));
-      const changedPost = updated.find((post) => post.id === postId);
-      if (changedPost) {
-        setLocalUser((user) => ({
-          ...user,
-          savedPlaces: syncSavedPlaceForPost(user.savedPlaces, changedPost),
-        }));
-      }
-      return updated;
-    });
-  }, []);
+  const toggleSave = useCallback(
+    (postId: string) => {
+      const post = postsRef.current.find((candidate) => candidate.id === postId);
+      if (!post) return;
+      const saving = !post.savedByCurrentUser;
+      const apply = (saved: boolean) =>
+        setPostList((current) => replacePost(current, postId, (p) => ({ ...p, savedByCurrentUser: saved })));
+      apply(saving);
+      void saveRequest(postId, saving).then((result) => {
+        if (!result.ok) apply(post.savedByCurrentUser); // roll back
+      });
+    },
+    [setPostList],
+  );
 
   const addComment = useCallback(
-    (postId: string, content: string) => {
-      if (!content.trim()) return;
-      const comment = buildNewComment(postId, content, currentUser);
-      setPosts((current) =>
-        current.map((post) => (post.id === postId ? addCommentToPost(post, comment) : post)),
-      );
+    async (postId: string, content: string) => {
+      const result = await addCommentRequest(postId, content.trim());
+      if (!result.ok) return result.message;
+      const comment: Comment = result.data;
+      setPostList((current) => replacePost(current, postId, (post) => ({ ...post, comments: [...post.comments, comment] })));
+      return undefined;
     },
-    [currentUser],
+    [setPostList],
   );
 
-  const editComment = useCallback((postId: string, commentId: string, content: string) => {
-    setPosts((current) =>
-      current.map((post) =>
-        post.id === postId ? editCommentOnPost(post, commentId, content) : post,
-      ),
-    );
-  }, []);
-
-  const deleteComment = useCallback((postId: string, commentId: string) => {
-    setPosts((current) =>
-      current.map((post) => (post.id === postId ? removeCommentFromPost(post, commentId) : post)),
-    );
-  }, []);
-
-  const updateProfile = useCallback(async (values: EditProfileValues) => {
-    const result = await patchMyProfile({
-      display_name: values.name.trim(),
-      username: values.username.trim(),
-      bio: values.bio.trim(),
-      interests: values.interests,
-    });
-    if (!result.ok) return result.message;
-
-    meRef.current = result.data;
-    setMe(result.data);
-    authorsRef.current = {
-      ...authorsRef.current,
-      [String(result.data.user_id)]: { name: profileName(result.data), avatarUrl: profilePhoto(result.data) },
-    };
-    // Location and skill level have no backend field yet: local-only.
-    setLocalUser((current) => ({
-      ...current,
-      location: values.location.trim() || undefined,
-      skillLevel: values.skillLevel,
-    }));
-    return undefined;
-  }, []);
-
-  const updateAvatar = useCallback((avatarUrl: string | undefined) => {
-    setLocalUser((current) => ({ ...current, avatarUrl }));
-  }, []);
-
-  const updatePrivacySettings = useCallback((settings: PrivacySettings) => {
-    setLocalUser((current) => ({ ...current, privacy: settings }));
-  }, []);
-
-  const removeSavedPlace = useCallback((placeId: string) => {
-    setLocalUser((current) => ({
-      ...current,
-      savedPlaces: current.savedPlaces.filter((place) => place.id !== placeId),
-    }));
-  }, []);
-
-  const isPlaceSaved = useCallback(
-    (placeId: string) => currentUser.savedPlaces.some((place) => place.id === placeId),
-    [currentUser.savedPlaces],
+  const editComment = useCallback(
+    async (postId: string, commentId: string, content: string) => {
+      const result = await editCommentRequest(commentId, content.trim());
+      if (!result.ok) return result.message;
+      setPostList((current) =>
+        replacePost(current, postId, (post) => ({
+          ...post,
+          comments: post.comments.map((comment) => (comment.id === commentId ? { ...comment, content: result.data.content } : comment)),
+        })),
+      );
+      return undefined;
+    },
+    [setPostList],
   );
 
-  const toggleSavePlace = useCallback((place: SavedPlace) => {
-    setLocalUser((current) => ({
-      ...current,
-      savedPlaces: toggleSavedPlaceEntry(current.savedPlaces, place),
-    }));
-  }, []);
+  const deleteComment = useCallback(
+    async (postId: string, commentId: string) => {
+      const result = await deleteCommentRequest(commentId);
+      if (!result.ok) return result.message;
+      setPostList((current) =>
+        replacePost(current, postId, (post) => ({ ...post, comments: post.comments.filter((comment) => comment.id !== commentId) })),
+      );
+      return undefined;
+    },
+    [setPostList],
+  );
+
+  const updateProfile = useCallback(
+    async (values: EditProfileValues) => {
+      const result = await patchMyProfile({
+        display_name: values.name.trim(),
+        username: values.username.trim(),
+        bio: values.bio.trim(),
+        interests: values.interests,
+        location: values.location.trim(),
+        skill_level: values.skillLevel,
+      });
+      if (!result.ok) return result.message;
+      applyMe({ ...(meRef.current ?? result.data), ...result.data });
+      return undefined;
+    },
+    [applyMe],
+  );
+
+  const updateAvatar = useCallback(
+    async (avatarUrl: string | undefined, file?: File) => {
+      if (file) {
+        const result = await uploadMyAvatar(file);
+        if (!result.ok) return result.message;
+        applyMe({ ...(meRef.current ?? result.data), ...result.data });
+      } else if (!avatarUrl && meRef.current?.photo) {
+        const result = await removeMyAvatar();
+        if (!result.ok) return result.message;
+        applyMe({ ...(meRef.current ?? result.data), ...result.data, photo: null });
+      }
+      return undefined;
+    },
+    [applyMe],
+  );
+
+  const updatePrivacySettings = useCallback(
+    async (settings: PrivacySettings) => {
+      const result = await patchMyProfile({ privacy_settings: settings });
+      if (!result.ok) return result.message;
+      applyMe({ ...(meRef.current ?? result.data), ...result.data });
+      return undefined;
+    },
+    [applyMe],
+  );
+
+  const saveOnboarding = useCallback(
+    async (data: OnboardingData) => {
+      const result = await patchMyProfile({
+        interests: data.interests,
+        location: data.location.trim(),
+        ...(data.activityLevel ? { skill_level: data.activityLevel } : {}),
+        onboarding_completed: true,
+      });
+      if (!result.ok) return result.message;
+      applyMe({ ...(meRef.current ?? result.data), ...result.data });
+      return undefined;
+    },
+    [applyMe],
+  );
+
+  const isPlaceSaved = useCallback((key: string) => savedPlaces.some((place) => place.id === key), [savedPlaces]);
+
+  const removeSavedPlace = useCallback(
+    (key: string) => {
+      const [kind, id] = key.split("-");
+      const previous = savedPlaces;
+      setSavedPlaces((current) => current.filter((place) => place.id !== key));
+      void setExploreSaved(kind === "trail" ? "trail" : "place", id, false).then((result) => {
+        if (!result.ok) setSavedPlaces(previous);
+      });
+    },
+    [savedPlaces],
+  );
+
+  const toggleSavePlace = useCallback(
+    (place: ExplorePlace) => {
+      const saved = savedFromPlace(place);
+      const previous = savedPlaces;
+      const saving = !previous.some((candidate) => candidate.id === saved.id);
+      setSavedPlaces(saving ? [saved, ...previous] : previous.filter((candidate) => candidate.id !== saved.id));
+      void setExploreSaved(place.kind, place.id, saving).then((result) => {
+        if (!result.ok) setSavedPlaces(previous);
+      });
+    },
+    [savedPlaces],
+  );
 
   const pathname = usePathname();
 
@@ -388,25 +534,43 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
     if (meStatusRef.current === "idle") void loadMe();
   }, [pathname, loadMe]);
 
-  /** Drops the signed-in user's data (profile, backend posts). Called on log
-   * out and right after a successful log in / sign up, so one account's data
-   * can never show for the next. */
+  // Once the profile is known, load what hangs off it.
+  useEffect(() => {
+    if (!viewerId) return;
+    let cancelled = false;
+    void loadProfileExtras().then((extras) => {
+      if (cancelled) return;
+      if (extras.saved.ok) setSavedPlaces(extras.saved.data);
+      if (extras.history.ok) setCompletedActivities(extras.history.data);
+      if (extras.groups.ok) setJoinedCommunities(extras.groups.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId]);
+
+  /** Drops the signed-in user's data. Called on log out and right after a
+   * successful log in / sign up, so one account's data can never show for
+   * the next. */
   const resetSession = useCallback(() => {
     meRef.current = null;
     setMe(null);
     setMeState("idle");
-    setLocalUser(MOCK_USER);
-    authorsRef.current = {};
+    setSavedPlaces([]);
+    setCompletedActivities([]);
+    setJoinedCommunities([]);
     setFeedError(null);
     setStatus("idle");
-    setPosts((current) => current.filter((post) => !post.persisted));
-  }, [setMeState, setStatus]);
+    setPostList(() => []);
+    clearUserDirectory();
+  }, [setMeState, setStatus, setPostList]);
 
   const value = useMemo<SocialStoreValue>(
     () => ({
       currentUser,
       currentUserStatus: meStatus,
       resetSession,
+      refreshProfileExtras,
       posts,
       viewerId,
       isCurrentUser,
@@ -414,15 +578,12 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
       feedError,
       refreshFeed,
       ensureFeedLoaded,
-      createBackendPost,
-      editBackendPost,
-      deleteBackendPost,
-      addBackendComment,
+      loadPostById,
+      loadGroupPosts,
       getPostById,
       createPost,
       editPost,
       deletePost,
-      setPostHidden,
       toggleLike,
       toggleSave,
       addComment,
@@ -431,14 +592,18 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
       updateProfile,
       updateAvatar,
       updatePrivacySettings,
+      saveOnboarding,
       removeSavedPlace,
       isPlaceSaved,
       toggleSavePlace,
     }),
+    // `directoryVersion` is listed so consumers re-render when the user directory grows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       currentUser,
       meStatus,
       resetSession,
+      refreshProfileExtras,
       posts,
       viewerId,
       isCurrentUser,
@@ -446,15 +611,12 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
       feedError,
       refreshFeed,
       ensureFeedLoaded,
-      createBackendPost,
-      editBackendPost,
-      deleteBackendPost,
-      addBackendComment,
+      loadPostById,
+      loadGroupPosts,
       getPostById,
       createPost,
       editPost,
       deletePost,
-      setPostHidden,
       toggleLike,
       toggleSave,
       addComment,
@@ -463,16 +625,18 @@ export function SocialStoreProvider({ children }: { children: ReactNode }) {
       updateProfile,
       updateAvatar,
       updatePrivacySettings,
+      saveOnboarding,
       removeSavedPlace,
       isPlaceSaved,
       toggleSavePlace,
+      directoryVersion,
     ],
   );
 
   return <SocialStoreContext.Provider value={value}>{children}</SocialStoreContext.Provider>;
 }
 
-/** Reads the shared mock profile/social state. Must be used within
+/** Reads the shared profile/social state. Must be used within
  * `SocialStoreProvider` (mounted once in `app/layout.tsx`). */
 export function useSocialStore(): SocialStoreValue {
   const context = useContext(SocialStoreContext);

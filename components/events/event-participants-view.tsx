@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useEventStore } from "@/context/event-store-context";
 import { useSocialStore } from "@/context/social-store-context";
+import { displayPerson } from "@/lib/user-directory";
 import type { EventParticipant } from "@/types/event";
 
 type EventParticipantsViewProps = {
@@ -23,10 +26,12 @@ function ParticipantRow({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const { currentUser } = useSocialStore();
+  const person = displayPerson(participant, currentUser);
   return (
     <li className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--outly-border)] bg-white p-4">
-      <Avatar name={participant.name} avatarUrl={participant.avatarUrl} size="sm" />
-      <span className="flex-1 text-sm font-semibold text-[var(--outly-ink)]">{participant.name}</span>
+      <Avatar name={person.name} avatarUrl={person.avatarUrl} size="sm" />
+      <span className="flex-1 text-sm font-semibold text-[var(--outly-ink)]">{person.name}</span>
       {participant.status === "pending" ? (
         isOrganizer ? (
           <div className="flex gap-2">
@@ -60,8 +65,28 @@ function ParticipantRow({
  * frontend counterpart to the Event Participant Workflow. */
 export function EventParticipantsView({ eventId }: EventParticipantsViewProps) {
   const { currentUser } = useSocialStore();
-  const { getEventById, approveParticipant, rejectParticipant } = useEventStore();
+  const { getEventById, approveParticipant, rejectParticipant, loadEvent } = useEventStore();
+  const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState<string>();
   const event = getEventById(eventId);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadEvent(eventId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, loadEvent]);
+
+  async function decide(action: Promise<string | undefined>) {
+    setActionError(undefined);
+    const error = await action;
+    if (error) setActionError(error);
+  }
+
+  if (!event && loading) return <LoadingState message="Loading participants…" />;
 
   if (!event) {
     return (
@@ -98,6 +123,12 @@ export function EventParticipantsView({ eventId }: EventParticipantsViewProps) {
         <p className="mt-1 text-sm text-[var(--outly-muted)]">{event.title}</p>
       </div>
 
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
       {pending.length > 0 ? (
         <div>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
@@ -109,8 +140,8 @@ export function EventParticipantsView({ eventId }: EventParticipantsViewProps) {
                 key={participant.id}
                 participant={participant}
                 isOrganizer={isOrganizer}
-                onApprove={() => approveParticipant(event.id, participant.id)}
-                onReject={() => rejectParticipant(event.id, participant.id)}
+                onApprove={() => decide(approveParticipant(event.id, participant.id))}
+                onReject={() => decide(rejectParticipant(event.id, participant.id))}
               />
             ))}
           </ul>
@@ -130,8 +161,8 @@ export function EventParticipantsView({ eventId }: EventParticipantsViewProps) {
                 key={participant.id}
                 participant={participant}
                 isOrganizer={isOrganizer}
-                onApprove={() => approveParticipant(event.id, participant.id)}
-                onReject={() => rejectParticipant(event.id, participant.id)}
+                onApprove={() => decide(approveParticipant(event.id, participant.id))}
+                onReject={() => decide(rejectParticipant(event.id, participant.id))}
               />
             ))}
           </ul>
@@ -149,8 +180,8 @@ export function EventParticipantsView({ eventId }: EventParticipantsViewProps) {
                 key={participant.id}
                 participant={participant}
                 isOrganizer={isOrganizer}
-                onApprove={() => approveParticipant(event.id, participant.id)}
-                onReject={() => rejectParticipant(event.id, participant.id)}
+                onApprove={() => decide(approveParticipant(event.id, participant.id))}
+                onReject={() => decide(rejectParticipant(event.id, participant.id))}
               />
             ))}
           </ul>

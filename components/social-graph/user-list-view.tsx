@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { UserRow } from "@/components/social-graph/user-row";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useSocialStore } from "@/context/social-store-context";
 import { resolveUserSummary } from "@/lib/user-directory";
 
@@ -12,11 +14,15 @@ type UserListViewProps = {
   userIds: string[];
   backHref: string;
   emptyMessage: string;
+  /** True while the list is being fetched from the backend. */
+  loading?: boolean;
+  /** Set when the list couldn't be loaded. */
+  error?: string;
 };
 
 /** Shared list screen for Followers and Following — resolves each id to
  * a display-ready user via `resolveUserSummary` and renders `UserRow`. */
-export function UserListView({ title, subtitle, userIds, backHref, emptyMessage }: UserListViewProps) {
+export function UserListView({ title, subtitle, userIds, backHref, emptyMessage, loading, error }: UserListViewProps) {
   const { currentUser } = useSocialStore();
   const users = userIds
     .map((id) => resolveUserSummary(id, currentUser))
@@ -37,7 +43,11 @@ export function UserListView({ title, subtitle, userIds, backHref, emptyMessage 
         <p className="mt-1 text-sm text-[var(--outly-muted)]">{subtitle}</p>
       </div>
 
-      {users.length === 0 ? (
+      {loading && users.length === 0 ? (
+        <LoadingState message="Loading people…" />
+      ) : error && users.length === 0 ? (
+        <ErrorState title="We couldn't load this list" description={error} />
+      ) : users.length === 0 ? (
         <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-10 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
           {emptyMessage}
         </p>

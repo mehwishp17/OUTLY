@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SessionScope } from "@/components/layout/session-scope";
 import { SocialStoreProvider } from "@/context/social-store-context";
 import { ActivityStoreProvider } from "@/context/activity-store-context";
 import { EventStoreProvider } from "@/context/event-store-context";
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <SocialStoreProvider>
+          <SessionScope>
           <ActivityStoreProvider>
             <EventStoreProvider>
               <GroupStoreProvider>
@@ -50,6 +52,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               </GroupStoreProvider>
             </EventStoreProvider>
           </ActivityStoreProvider>
+          </SessionScope>
         </SocialStoreProvider>
       </body>
     </html>

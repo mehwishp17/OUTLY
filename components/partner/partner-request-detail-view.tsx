@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/alert";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Textarea } from "@/components/ui/textarea";
 import { usePartnerStore } from "@/context/partner-store-context";
 import { useSocialStore } from "@/context/social-store-context";
@@ -31,12 +32,26 @@ function formatDateTime(iso: string): string {
 export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getRequestById, deleteRequest, closeRequest, requestToJoin, withdrawJoinRequest } =
+  const { getRequestById, deleteRequest, closeRequest, requestToJoin, withdrawJoinRequest, loadRequest } =
     usePartnerStore();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [joinMessageDraft, setJoinMessageDraft] = useState("");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const request = getRequestById(requestId);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadRequest(requestId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId, loadRequest]);
+
+  if (!request && loading) return <LoadingState message="Loading request…" />;
 
   if (!request) {
     return (
@@ -57,12 +72,16 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
   }
 
   const isAuthor = request.authorId === currentUser.id;
-  const myJoinRequest = request.joinRequests.find((join) => join.id === currentUser.id);
-  const acceptedCount = request.joinRequests.filter((join) => join.status === "accepted").length;
+  const myJoinStatus = request.myJoinStatus;
+  const acceptedCount = request.spotsFilled;
 
-  function handleRequestToJoin() {
-    const result = requestToJoin(request!.id, joinMessageDraft);
-    if (result === "full") {
+  async function handleRequestToJoin() {
+    setBusy(true);
+    const { result, error } = await requestToJoin(request!.id, joinMessageDraft);
+    setBusy(false);
+    if (error) {
+      setStatusMessage(error);
+    } else if (result === "full") {
       setStatusMessage("All spots for this request have already been filled.");
     } else if (result === "already-requested") {
       setStatusMessage("You've already requested to join this one.");
@@ -70,6 +89,13 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
       setStatusMessage("Request sent! You'll be added once the poster accepts.");
       setJoinMessageDraft("");
     }
+  }
+
+  async function handleWithdraw() {
+    setBusy(true);
+    const error = await withdrawJoinRequest(request!.id);
+    setBusy(false);
+    setStatusMessage(error ?? null);
   }
 
   return (
@@ -95,7 +121,7 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
               <h1 className="text-xl font-bold tracking-tight text-[var(--outly-ink)] sm:text-2xl">
                 {ACTIVITY_TYPE_LABELS[request.activity]} partner for {request.destination}
               </h1>
-              <p className="text-sm text-[var(--outly-muted)]">Posted by {request.authorName}</p>
+              <p className="text-sm text-[var(--outly-muted)]">Posted by {isAuthor ? currentUser.name || "You" : request.authorName}</p>
             </div>
           </div>
 
@@ -106,7 +132,15 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
                 { label: "Edit request", onSelect: () => router.push(`/partner/${request.id}/edit`) },
                 { label: "View join requests", onSelect: () => router.push(`/partner/${request.id}/requests`) },
                 ...(request.status === "open"
-                  ? [{ label: "Close request", onSelect: () => closeRequest(request.id) }]
+                  ? [
+                      {
+                        label: "Close request",
+                        onSelect: async () => {
+                          const error = await closeRequest(request.id);
+                          if (error) setStatusMessage(error);
+                        },
+                      },
+                    ]
                   : []),
                 { label: "Delete request", destructive: true, onSelect: () => setConfirmingDelete(true) },
               ]}
@@ -157,22 +191,22 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
 
         <p className="mt-5 text-sm leading-relaxed text-[var(--outly-ink)]">{request.description}</p>
 
-        {!isAuthor && request.status === "open" ? (
+        {!isAuthor && (request.status === "open" || myJoinStatus) ? (
           <div className="mt-6 border-t border-[var(--outly-border)] pt-5">
             {statusMessage ? <Alert variant="info" title={statusMessage} className="mb-4" /> : null}
 
-            {myJoinRequest ? (
+            {myJoinStatus ? (
               <div className="flex items-center gap-3">
                 <span className="rounded-full bg-[var(--outly-lavender)] px-2.5 py-1 text-xs font-semibold text-[var(--outly-purple-dark)]">
-                  {myJoinRequest.status === "pending"
+                  {myJoinStatus === "pending"
                     ? "Request pending"
-                    : myJoinRequest.status === "accepted"
+                    : myJoinStatus === "accepted"
                       ? "You're in!"
                       : "Request declined"}
                 </span>
-                {myJoinRequest.status === "pending" ? (
-                  <Button variant="secondary" onClick={() => withdrawJoinRequest(request.id)}>
-                    Withdraw request
+                {myJoinStatus === "pending" || myJoinStatus === "accepted" ? (
+                  <Button variant="secondary" onClick={handleWithdraw} disabled={busy}>
+                    {myJoinStatus === "pending" ? "Withdraw request" : "Leave"}
                   </Button>
                 ) : null}
               </div>
@@ -186,7 +220,9 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
                   onChange={(event) => setJoinMessageDraft(event.target.value)}
                   placeholder="Introduce yourself or share relevant experience…"
                 />
-                <Button onClick={handleRequestToJoin}>Request to join</Button>
+                <Button onClick={handleRequestToJoin} disabled={busy}>
+                  Request to join
+                </Button>
               </div>
             )}
           </div>
@@ -197,9 +233,13 @@ export function PartnerRequestDetailView({ requestId }: PartnerRequestDetailView
         open={confirmingDelete}
         title="Delete this request?"
         description="This can't be undone."
-        onConfirm={() => {
-          deleteRequest(request.id);
+        onConfirm={async () => {
+          const error = await deleteRequest(request.id);
           setConfirmingDelete(false);
+          if (error) {
+            setStatusMessage(error);
+            return;
+          }
           router.push("/partner");
         }}
         onCancel={() => setConfirmingDelete(false)}

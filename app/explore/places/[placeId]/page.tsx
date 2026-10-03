@@ -17,7 +17,7 @@ export default async function PlaceDetailPage({ params }: PlaceDetailPageProps) 
   return (
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
-      <ExplorePlaceDetailView placeId={placeId} expectedKind="place" />
+      <ExplorePlaceDetailView key={placeId} placeId={placeId} expectedKind="place" />
     </div>
   );
 }

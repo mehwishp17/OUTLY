@@ -1,13 +1,35 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { MOCK_NOTIFICATIONS } from "@/lib/mock/mock-notifications";
+import { useSocialStore } from "@/context/social-store-context";
+import {
+  dismissRequest,
+  fetchNotifications,
+  fetchUnreadCount,
+  mapNotification,
+  markAllReadRequest,
+  markReadRequest,
+} from "@/lib/api/notifications";
+import type { BackendNotification } from "@/lib/api/notifications";
+import {
+  isRealtimeConnected,
+  startRealtime,
+  stopRealtime,
+  subscribeRealtime,
+  subscribeRealtimeStatus,
+} from "@/lib/realtime";
 import type { OutlyNotification } from "@/types/notification";
+
+type LoadStatus = "idle" | "loading" | "ready" | "error";
 
 type NotificationStoreValue = {
   notifications: OutlyNotification[];
   unreadCount: number;
+  status: LoadStatus;
+  error: string | null;
+  /** (Re)loads the list from the backend. */
+  refresh: () => Promise<void>;
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
   dismiss: (notificationId: string) => void;
@@ -15,44 +37,120 @@ type NotificationStoreValue = {
 
 const NotificationStoreContext = createContext<NotificationStoreValue | null>(null);
 
+const POLL_MS = 30_000;
+
 /**
- * Session-only mock "backend" for the Notifications module. Seed
- * notifications link to real content already created by the other
- * domain modules (posts, events, groups, conversations, partner
- * requests) — there is no live notification-generation pipeline in this
- * frontend-only phase (that would require simulating other users acting
- * asynchronously, which is out of scope here). Nothing here persists
- * beyond the current browser session.
+ * Notifications state, backed by the OUTLY backend
+ * (`lib/api/notifications.ts`). New notifications arrive live over the
+ * WebSocket (`lib/realtime.ts`); while the socket is down the unread count
+ * is polled every 30 s. This provider also owns the socket's lifetime: it
+ * connects once the user is signed in and disconnects on log out.
  */
 export function NotificationStoreProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<OutlyNotification[]>(MOCK_NOTIFICATIONS);
+  const { currentUser } = useSocialStore();
+  const meId = currentUser.id;
+  const [notifications, setNotifications] = useState<OutlyNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [status, setStatus] = useState<LoadStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const loadedRef = useRef(false);
+  const notificationsRef = useRef<OutlyNotification[]>([]);
+
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
+
+  const refresh = useCallback(async () => {
+    setStatus((current) => (current === "ready" ? current : "loading"));
+    const result = await fetchNotifications();
+    if (result.ok) {
+      setNotifications(result.data.items);
+      setUnreadCount(result.data.unread);
+      setError(null);
+      setStatus("ready");
+      loadedRef.current = true;
+    } else {
+      setError(result.message);
+      setStatus("error");
+    }
+  }, []);
+
+  // Signed in: open the live channel and load the unread badge.
+  useEffect(() => {
+    if (!meId) return;
+    startRealtime();
+    void fetchUnreadCount().then((result) => {
+      if (result.ok) setUnreadCount(result.data);
+    });
+    return () => {
+      stopRealtime();
+    };
+  }, [meId]);
+
+  // New notifications pushed over the socket.
+  useEffect(() => {
+    return subscribeRealtime((event) => {
+      if (event.type !== "notification.created") return;
+      const raw = event.notification as BackendNotification | undefined;
+      if (!raw) return;
+      const incoming = mapNotification(raw);
+      setNotifications((current) => (current.some((n) => n.id === incoming.id) ? current : [incoming, ...current]));
+      if (typeof event.unread_count === "number") setUnreadCount(event.unread_count);
+    });
+  }, []);
+
+  // Without a live socket, poll the unread count (and the list if it is open).
+  useEffect(() => {
+    if (!meId) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const sync = () => {
+      clearInterval(timer);
+      if (isRealtimeConnected()) return;
+      timer = setInterval(() => {
+        void fetchUnreadCount().then((result) => {
+          if (!result.ok) return;
+          setUnreadCount((current) => {
+            if (result.data !== current && loadedRef.current) void refresh();
+            return result.data;
+          });
+        });
+      }, POLL_MS);
+    };
+    sync();
+    const unsubscribe = subscribeRealtimeStatus(sync);
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
+  }, [meId, refresh]);
 
   const markAsRead = useCallback((notificationId: string) => {
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === notificationId ? { ...notification, read: true } : notification,
-      ),
-    );
+    const target = notificationsRef.current.find((notification) => notification.id === notificationId);
+    if (target && !target.read) {
+      setNotifications((current) =>
+        current.map((notification) => (notification.id === notificationId ? { ...notification, read: true } : notification)),
+      );
+      setUnreadCount((count) => Math.max(0, count - 1));
+    }
+    void markReadRequest(notificationId);
   }, []);
 
   const markAllAsRead = useCallback(() => {
     setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
+    setUnreadCount(0);
+    void markAllReadRequest();
   }, []);
 
   const dismiss = useCallback((notificationId: string) => {
-    setNotifications((current) =>
-      current.filter((notification) => notification.id !== notificationId),
-    );
+    const target = notificationsRef.current.find((notification) => notification.id === notificationId);
+    setNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+    if (target && !target.read) setUnreadCount((count) => Math.max(0, count - 1));
+    void dismissRequest(notificationId);
   }, []);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((notification) => !notification.read).length,
-    [notifications],
-  );
-
   const value = useMemo<NotificationStoreValue>(
-    () => ({ notifications, unreadCount, markAsRead, markAllAsRead, dismiss }),
-    [notifications, unreadCount, markAsRead, markAllAsRead, dismiss],
+    () => ({ notifications, unreadCount, status, error, refresh, markAsRead, markAllAsRead, dismiss }),
+    [notifications, unreadCount, status, error, refresh, markAsRead, markAllAsRead, dismiss],
   );
 
   return (

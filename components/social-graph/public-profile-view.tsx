@@ -10,11 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { ReportDialog } from "@/components/ui/report-dialog";
 import { useAdminStore } from "@/context/admin-store-context";
 import { useChatStore } from "@/context/chat-store-context";
 import { useFollowStore } from "@/context/follow-store-context";
 import { useSocialStore } from "@/context/social-store-context";
+import { fetchPublicProfile } from "@/lib/api/profile";
+import type { PublicProfile } from "@/lib/api/profile";
 import { resolveUserSummary } from "@/lib/user-directory";
 import type { ReportReason } from "@/types/report";
 
@@ -35,10 +38,13 @@ type PublicProfileViewProps = {
 export function PublicProfileView({ userId }: PublicProfileViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getFollowerIds, getFollowingIds } = useFollowStore();
+  const { getFollowerIds, getFollowingIds, loadFollowLists } = useFollowStore();
   const { startDirectConversation } = useChatStore();
   const { createReport } = useAdminStore();
   const [reportingUser, setReportingUser] = useState(false);
+  const [actionError, setActionError] = useState<string>();
+  const [profile, setProfile] = useState<PublicProfile>();
+  const [status, setStatus] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const user = resolveUserSummary(userId, currentUser);
   const isSelf = userId === currentUser.id;
 
@@ -46,14 +52,38 @@ export function PublicProfileView({ userId }: PublicProfileViewProps) {
     if (isSelf) router.replace("/profile");
   }, [isSelf, router]);
 
+  useEffect(() => {
+    if (isSelf) return;
+    let cancelled = false;
+    void fetchPublicProfile(userId).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setProfile(result.data);
+        setStatus("ready");
+        if (!result.data.is_restricted) void loadFollowLists(userId);
+      } else {
+        setStatus(result.status === 404 ? "missing" : "error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, isSelf, loadFollowLists]);
+
   if (isSelf) return null;
 
-  if (!user) {
+  if (status === "loading") return <LoadingState message="Loading profile…" />;
+
+  if (!user || status !== "ready") {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-4 py-16 text-center sm:px-6">
-        <h1 className="text-xl font-bold text-[var(--outly-ink)]">Profile not found</h1>
+        <h1 className="text-xl font-bold text-[var(--outly-ink)]">
+          {status === "error" ? "We couldn't load this profile" : "Profile not found"}
+        </h1>
         <p className="text-sm text-[var(--outly-muted)]">
-          This person may not exist, or the link is incorrect.
+          {status === "error"
+            ? "Please check your connection and try again."
+            : "This person may not exist, or the link is incorrect."}
         </p>
         <Link
           href="/people"
@@ -95,9 +125,11 @@ export function PublicProfileView({ userId }: PublicProfileViewProps) {
                   {user.location}
                 </p>
               ) : null}
-              <Badge variant="solid" className="mt-2">
-                {SKILL_LABELS[user.skillLevel]}
-              </Badge>
+              {profile && !profile.is_restricted ? (
+                <Badge variant="solid" className="mt-2">
+                  {SKILL_LABELS[user.skillLevel]}
+                </Badge>
+              ) : null}
             </div>
           </div>
 
@@ -105,7 +137,12 @@ export function PublicProfileView({ userId }: PublicProfileViewProps) {
             <Button
               variant="secondary"
               size="lg"
-              onClick={() => router.push(`/chat/${startDirectConversation(user.id)}`)}
+              onClick={async () => {
+                setActionError(undefined);
+                const result = await startDirectConversation(user.id);
+                if (result.error || !result.id) setActionError(result.error);
+                else router.push(`/chat/${result.id}`);
+              }}
             >
               <Icon name="message-circle" className="h-4 w-4" />
               Message
@@ -119,15 +156,35 @@ export function PublicProfileView({ userId }: PublicProfileViewProps) {
         </div>
       </section>
 
-      <ProfileStats
-        stats={[
-          { label: "Followers", value: getFollowerIds(user.id).length, href: `/people/${user.id}/followers` },
-          { label: "Following", value: getFollowingIds(user.id).length, href: `/people/${user.id}/following` },
-        ]}
-      />
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
+      {profile && !profile.is_restricted ? (
+        <ProfileStats
+          stats={[
+            {
+              label: "Followers",
+              value: Math.max(getFollowerIds(user.id).length, profile.stats?.followers ?? 0),
+              href: `/people/${user.id}/followers`,
+            },
+            {
+              label: "Following",
+              value: Math.max(getFollowingIds(user.id).length, profile.stats?.following ?? 0),
+              href: `/people/${user.id}/following`,
+            },
+          ]}
+        />
+      ) : null}
 
       <section className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-8">
-        {user.bio ? (
+        {profile?.is_restricted ? (
+          <p className="text-sm text-[var(--outly-muted)]">
+            This explorer keeps their profile private. Follow them to see more.
+          </p>
+        ) : user.bio ? (
           <p className="text-sm leading-relaxed text-[var(--outly-ink)]">{user.bio}</p>
         ) : (
           <p className="text-sm text-[var(--outly-muted)]">This explorer hasn&apos;t added a bio yet.</p>
@@ -155,16 +212,15 @@ export function PublicProfileView({ userId }: PublicProfileViewProps) {
       <ReportDialog
         open={reportingUser}
         targetLabel={user.name}
-        onSubmit={(reportReason: ReportReason, description) => {
-          createReport({
+        onSubmit={async (reportReason: ReportReason, description) => {
+          const error = await createReport({
             targetType: "user",
             targetId: user.id,
-            targetLabel: user.name,
             reason: reportReason,
             description,
-            reporterId: currentUser.id,
           });
           setReportingUser(false);
+          setActionError(error ?? undefined);
         }}
         onCancel={() => setReportingUser(false)}
       />

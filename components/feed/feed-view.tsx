@@ -12,8 +12,8 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { useSocialStore } from "@/context/social-store-context";
 
 /** Home Feed: a "start a post" prompt followed by every post, newest
- * first. Posts and comments are loaded from the OUTLY backend (re-fetched
- * each time the feed is opened); likes and saves are local-only. */
+ * first. Posts, comments, likes and saves all come from the OUTLY backend
+ * (re-fetched each time the feed is opened). */
 export function FeedView() {
   const router = useRouter();
   const { currentUser, posts, feedStatus, feedError, refreshFeed } = useSocialStore();
@@ -28,7 +28,7 @@ export function FeedView() {
   }, [feedError, router]);
 
   const sortedPosts = posts
-    .filter((post) => post.persisted && !post.groupId && !post.hidden)
+    .filter((post) => !post.groupId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (

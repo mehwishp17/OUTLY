@@ -31,6 +31,7 @@ def compute_overview():
     from apps.messaging.models import Message
     from apps.moderation.models import ModerationAction, Report
     from apps.partner.models import PartnerRequest
+    from apps.places.models import Place, Trail
     from apps.posts.models import Comment, Like, Post
 
     now = timezone.now()
@@ -42,10 +43,13 @@ def compute_overview():
     posts = Post.objects.aggregate(
         total=Count("id", filter=Q(status="ACTIVE")), new_7d=Count("id", filter=Q(status="ACTIVE", created_at__gte=d7)),
         hidden=Count("id", filter=Q(status="HIDDEN")),
+        group_posts=Count("id", filter=Q(status="ACTIVE", group__isnull=False)),
     )
     events = Event.objects.aggregate(
         total=Count("id"), upcoming=Count("id", filter=Q(status="ACTIVE", start_at__gte=now)),
         pending_approval=Count("id", filter=Q(approval_status="PENDING")), capacity=Sum("capacity"),
+        cancelled=Count("id", filter=Q(status="CANCELLED")),
+        completed=Count("id", filter=Q(status="ACTIVE", start_at__lt=now)),
     )
     joined = EventParticipant.objects.filter(status="APPROVED").count()
     return {
@@ -65,6 +69,7 @@ def compute_overview():
         "events": {**events, "participants_joined": joined,
                    "fill_rate": round(joined / events["capacity"], 3) if events["capacity"] else 0},
         "groups": {"total": Group.objects.count(), "memberships": GroupMember.objects.count()},
+        "content": {"places": Place.objects.filter(is_active=True).count(), "trails": Trail.objects.filter(is_active=True).count()},
         "partner_requests": {"open": PartnerRequest.objects.filter(status="OPEN").count(),
                              "total": PartnerRequest.objects.count()},
         "moderation": {

@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PartnerRequestComposer } from "@/components/partner/partner-request-composer";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { usePartnerStore } from "@/context/partner-store-context";
 import { useSocialStore } from "@/context/social-store-context";
 
@@ -14,8 +16,21 @@ type EditPartnerRequestViewProps = {
 export function EditPartnerRequestView({ requestId }: EditPartnerRequestViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getRequestById, editRequest } = usePartnerStore();
+  const { getRequestById, editRequest, loadRequest } = usePartnerStore();
   const request = getRequestById(requestId);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadRequest(requestId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId, loadRequest]);
+
+  if (!request && loading) return <LoadingState message="Loading request…" />;
 
   if (!request || request.authorId !== currentUser.id) {
     return (
@@ -46,9 +61,11 @@ export function EditPartnerRequestView({ requestId }: EditPartnerRequestViewProp
         submitLabel="Save changes"
         initialValues={request}
         onCancel={() => router.push(`/partner/${request.id}`)}
-        onSubmit={(values) => {
-          editRequest(request.id, values);
+        onSubmit={async (values) => {
+          const error = await editRequest(request.id, values);
+          if (error) return error;
           router.push(`/partner/${request.id}`);
+          return undefined;
         }}
       />
     </div>

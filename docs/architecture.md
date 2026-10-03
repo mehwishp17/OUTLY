@@ -1,5 +1,8 @@
 # OUTLY — Architecture
 
+> **Note:** this document describes the original frontend-only prototype. The app is now connected to the Django backend — see [backend-integration.md](./backend-integration.md) for the current behaviour.
+
+
 ## Current architecture (landing page milestone)
 
 - **Framework:** Next.js 16 (App Router), TypeScript, Tailwind CSS v4.

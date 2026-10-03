@@ -16,6 +16,9 @@ const FIELD_MAP: Record<string, string> = {
   full_name: "fullName",
   confirm_password: "confirmPassword",
   terms_accepted: "acceptTerms",
+  // password reset / email verification links
+  uid: "token",
+  token: "token",
 };
 
 type ApiBody = {
@@ -83,4 +86,32 @@ export function registerRequest(values: SignupFormValues): Promise<AuthApiResult
     },
     "We couldn't create your account.",
   );
+}
+
+/** Asks the backend to email a reset link. The answer is the same whether or not the email is registered. */
+export function requestPasswordReset(email: string): Promise<AuthApiResult> {
+  return postAuth("/api/auth/public/password-reset", { email: email.trim() }, "We couldn't send the reset link.");
+}
+
+/** Sets a new password using the `uid` and `token` from the emailed link. */
+export function confirmPasswordReset(values: {
+  uid: string;
+  token: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthApiResult> {
+  return postAuth(
+    "/api/auth/public/password-reset/confirm",
+    { uid: values.uid, token: values.token, password: values.password, confirm_password: values.confirmPassword },
+    "We couldn't reset your password.",
+  );
+}
+
+/** Confirms an email address using the token from the emailed link. */
+export function verifyEmail(token: string): Promise<AuthApiResult> {
+  return postAuth("/api/auth/public/verify-email", { token }, "This verification link is invalid or has expired.");
+}
+
+export function resendVerification(email: string): Promise<AuthApiResult> {
+  return postAuth("/api/auth/public/resend-verification", { email: email.trim() }, "We couldn't resend the email.");
 }

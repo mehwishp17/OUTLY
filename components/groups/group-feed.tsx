@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { PostCard } from "@/components/feed/post-card";
 import { useSocialStore } from "@/context/social-store-context";
 
@@ -13,9 +16,24 @@ type GroupFeedProps = {
  * as the main Home Feed (`components/feed/`), filtered to this group's
  * posts (`Post.groupId`) — see `types/post.ts`. */
 export function GroupFeed({ groupId }: GroupFeedProps) {
-  const { currentUser, posts } = useSocialStore();
+  const { currentUser, posts, loadGroupPosts } = useSocialStore();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadGroupPosts(groupId).then((failure) => {
+      if (cancelled) return;
+      setError(failure?.message);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, loadGroupPosts]);
+
   const groupPosts = posts
-    .filter((post) => post.groupId === groupId && !post.hidden)
+    .filter((post) => post.groupId === groupId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
@@ -30,7 +48,11 @@ export function GroupFeed({ groupId }: GroupFeedProps) {
         </span>
       </Link>
 
-      {groupPosts.length === 0 ? (
+      {loading && groupPosts.length === 0 ? (
+        <LoadingState message="Loading the group feed…" />
+      ) : error && groupPosts.length === 0 ? (
+        <ErrorState title="We couldn't load the group feed" description={error} />
+      ) : groupPosts.length === 0 ? (
         <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-8 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
           No posts yet — be the first to share something with this group.
         </p>

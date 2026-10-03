@@ -64,6 +64,37 @@ def target_preview(target_type, obj):
     return {"type": target_type, "id": obj.pk, "text": str(text)[:300], "status": getattr(obj, "status", None)}
 
 
+def target_labels(reports):
+    """{report_id: short text about what was reported}, one query per target type."""
+    from apps.events.models import Event
+    from apps.groups.models import Group
+    from apps.messaging.models import Message
+    from apps.places.models import Place
+    from apps.posts.models import Comment, Post
+    from apps.reviews.models import Review
+
+    sources = {
+        "POST": (Post, "caption"), "COMMENT": (Comment, "content"), "EVENT": (Event, "title"),
+        "GROUP": (Group, "name"), "PLACE": (Place, "name"), "MESSAGE": (Message, "content"), "REVIEW": (Review, "text"),
+    }
+    by_type = {}
+    for report in reports:
+        by_type.setdefault(report.target_type, []).append(report)
+    labels = {}
+    for target_type, items in by_type.items():
+        ids = {r.target_id for r in items}
+        if target_type == "USER":
+            rows = User.objects.filter(pk__in=ids).values_list("pk", "profile__display_name", "profile__username")
+            names = {pk: display or username for pk, display, username in rows}
+        else:
+            model, field = sources[target_type]
+            names = {pk: str(text) for pk, text in model.objects.filter(pk__in=ids).values_list("pk", field)}
+        for report in items:
+            text = names.get(report.target_id)
+            labels[report.pk] = (text[:80] + "…" if text and len(text) > 80 else text) or "(removed)"
+    return labels
+
+
 class ReportService:
     @staticmethod
     def create(reporter, target_type, target_id, reason, description):

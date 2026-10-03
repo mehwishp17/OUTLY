@@ -107,6 +107,21 @@ class EventService:
                 target_type="event", target_id=event.pk,
             )
 
+    @staticmethod
+    @transaction.atomic
+    def delete_permanently(user, event_id):
+        """Hard delete. Only for events nobody depends on: already cancelled
+        (everyone was told) or without any confirmed/pending participant."""
+        event = Event.objects.select_for_update(of=("self",)).filter(pk=event_id).first()
+        if event is None:
+            raise NotFound("Event not found.")
+        if not _can_manage(user, event):
+            raise PermissionDenied("Only the organizer can delete this event.")
+        in_use = EventParticipant.objects.filter(event=event, status__in=["APPROVED", "PENDING"]).exists()
+        if event.status != Event.Status.CANCELLED and in_use:
+            raise ValidationError({"detail": ["People have joined this event. Cancel it first so they are told."]})
+        event.delete()
+
     # ---- participation (capacity-safe) ----
     @staticmethod
     def _approved_count(event):

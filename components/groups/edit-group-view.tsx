@@ -1,11 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { GroupComposer } from "@/components/groups/group-composer";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useGroupStore } from "@/context/group-store-context";
-import { useSocialStore } from "@/context/social-store-context";
 
 type EditGroupViewProps = {
   groupId: string;
@@ -13,12 +14,23 @@ type EditGroupViewProps = {
 
 export function EditGroupView({ groupId }: EditGroupViewProps) {
   const router = useRouter();
-  const { currentUser } = useSocialStore();
-  const { getGroupById, editGroup } = useGroupStore();
+  const { getGroupById, editGroup, loadGroup } = useGroupStore();
   const group = getGroupById(groupId);
-  const membership = group?.members.find((member) => member.id === currentUser.id);
+  const [loading, setLoading] = useState(true);
 
-  if (!group || membership?.role !== "owner") {
+  useEffect(() => {
+    let cancelled = false;
+    void loadGroup(groupId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, loadGroup]);
+
+  if (!group && loading) return <LoadingState message="Loading group…" />;
+
+  if (!group || group.myRole !== "owner") {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-4 py-16 text-center sm:px-6">
         <h1 className="text-xl font-bold text-[var(--outly-ink)]">
@@ -47,9 +59,11 @@ export function EditGroupView({ groupId }: EditGroupViewProps) {
         submitLabel="Save changes"
         initialValues={group}
         onCancel={() => router.push(`/groups/${group.id}`)}
-        onSubmit={(values) => {
-          editGroup(group.id, values);
+        onSubmit={async (values) => {
+          const error = await editGroup(group.id, values);
+          if (error) return error;
           router.push(`/groups/${group.id}`);
+          return undefined;
         }}
       />
     </div>

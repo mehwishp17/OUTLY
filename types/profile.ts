@@ -1,8 +1,7 @@
 /**
- * Shared types for the Phase 3 profile module. All profile data lives in
- * `context/social-store-context.tsx` (seeded from `lib/mock/mock-user.ts`)
- * for the duration of the browser session only — nothing here is
- * persisted to a backend, `localStorage`, or a database.
+ * Shared types for the profile module. Profile data comes from the OUTLY
+ * backend (`lib/api/profile.ts`) and lives in
+ * `context/social-store-context.tsx`.
  */
 
 export type SkillLevel = "beginner" | "intermediate" | "advanced";
@@ -29,6 +28,8 @@ export type SavedPlace = {
   title: string;
   location: string;
   category: string;
+  /** Where "View" goes (the place's or trail's Explore page). */
+  href?: string;
 };
 
 export type PrivacySettings = {
@@ -39,6 +40,8 @@ export type PrivacySettings = {
 
 export type UserProfile = {
   id: string;
+  /** Backend role: USER, ORGANIZER, CONTENT_MODERATOR or ADMINISTRATOR. */
+  role?: string;
   name: string;
   username: string;
   avatarUrl?: string;

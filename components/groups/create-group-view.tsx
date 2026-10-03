@@ -15,9 +15,11 @@ export function CreateGroupView() {
         description="Start a community around a shared outdoor interest."
         submitLabel="Create group"
         onCancel={() => router.push("/groups")}
-        onSubmit={(values) => {
-          const group = createGroup(values);
+        onSubmit={async (values) => {
+          const { group, error } = await createGroup(values);
+          if (error || !group) return error;
           router.push(`/groups/${group.id}`);
+          return undefined;
         }}
       />
     </div>

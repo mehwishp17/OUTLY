@@ -13,7 +13,7 @@ function formatDate(iso: string): string {
 }
 
 export function PartnerRequestCard({ request }: PartnerRequestCardProps) {
-  const acceptedCount = request.joinRequests.filter((join) => join.status === "accepted").length;
+  const acceptedCount = request.spotsFilled;
 
   return (
     <Link

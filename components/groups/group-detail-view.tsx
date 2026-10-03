@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/ui/alert";
@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
+import { CoverImage } from "@/components/ui/cover-image";
 import { Tabs } from "@/components/ui/tabs";
 import { GroupFeed } from "@/components/groups/group-feed";
 import { GroupMembersView } from "@/components/groups/group-members-view";
-import { useChatStore } from "@/context/chat-store-context";
+import { groupChatRequest } from "@/lib/api/chat";
 import { useGroupStore } from "@/context/group-store-context";
-import { useSocialStore } from "@/context/social-store-context";
 
 type GroupDetailViewProps = {
   groupId: string;
@@ -21,12 +22,40 @@ type GroupDetailViewProps = {
 
 export function GroupDetailView({ groupId }: GroupDetailViewProps) {
   const router = useRouter();
-  const { currentUser } = useSocialStore();
-  const { getGroupById, deleteGroup, joinGroup, leaveGroup } = useGroupStore();
-  const { conversations } = useChatStore();
+  const { getGroupById, deleteGroup, joinGroup, leaveGroup, loadGroup } = useGroupStore();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [leaveMessage, setLeaveMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [chat, setChat] = useState<{ groupId: string; id: string }>();
   const group = getGroupById(groupId);
+  const isMember = Boolean(group?.myRole);
+  const conversationId = isMember && chat?.groupId === groupId ? chat.id : undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadGroup(groupId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, loadGroup]);
+
+  // Members get a link to the group's chat.
+  useEffect(() => {
+    if (!isMember) return;
+    let cancelled = false;
+    void groupChatRequest(groupId).then((result) => {
+      if (!cancelled && result.ok) setChat({ groupId, id: result.data });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, isMember]);
+
+  if (!group && loading) return <LoadingState message="Loading group…" />;
 
   if (!group) {
     return (
@@ -46,15 +75,25 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
     );
   }
 
-  const membership = group.members.find((member) => member.id === currentUser.id);
-  const isOwner = membership?.role === "owner";
-  const isMember = Boolean(membership);
+  const isOwner = group.myRole === "owner";
   const canSeeContent = group.visibility === "public" || isMember;
-  const groupConversation = conversations.find((conversation) => conversation.groupId === group.id);
 
-  function handleLeave() {
-    const result = leaveGroup(group!.id);
-    if (result === "owner-must-transfer-first") {
+  async function handleJoin() {
+    setBusy(true);
+    setActionError(undefined);
+    const { result, error } = await joinGroup(group!.id);
+    setBusy(false);
+    if (error) setActionError(error);
+    else if (result === "requested") setLeaveMessage("Your request was sent to the group's moderators.");
+  }
+
+  async function handleLeave() {
+    setBusy(true);
+    setActionError(undefined);
+    const { result, error } = await leaveGroup(group!.id);
+    setBusy(false);
+    if (error) setActionError(error);
+    else if (result === "owner-must-transfer-first") {
       setLeaveMessage("As the owner, you can't leave your own group yet — this app doesn't support transferring ownership.");
     }
   }
@@ -71,12 +110,13 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
 
       <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white shadow-[var(--shadow-soft)]">
         <div
-          className="relative flex h-32 items-end p-6"
+          className="group relative flex h-40 items-end overflow-hidden p-6 sm:h-52"
           style={{ backgroundImage: group.gradient }}
           role="img"
           aria-label={`${group.name} — illustrative visual`}
         >
-          <span className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
+          {group.imageUrl ? <CoverImage src={group.imageUrl} sizes="(min-width: 768px) 672px, 100vw" /> : null}
+          <span className="relative flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
             <Icon name={group.visibility === "private" ? "shield-check" : "compass"} className="h-3.5 w-3.5" />
             {group.visibility === "private" ? "Private" : "Public"}
           </span>
@@ -87,7 +127,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-[var(--outly-ink)]">{group.name}</h1>
               <p className="mt-1 text-sm font-medium uppercase tracking-wide text-[var(--outly-violet)]">
-                {group.category} · {group.members.length} member{group.members.length === 1 ? "" : "s"}
+                {group.category} · {group.memberCount} member{group.memberCount === 1 ? "" : "s"}
               </p>
             </div>
 
@@ -105,17 +145,26 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
           <p className="mt-4 text-sm leading-relaxed text-[var(--outly-ink)]">{group.description}</p>
 
           {leaveMessage ? <Alert variant="info" title={leaveMessage} className="mt-4" /> : null}
+          {actionError ? <Alert variant="error" title={actionError} className="mt-4" /> : null}
 
           <div className="mt-5 flex flex-wrap gap-2">
             {!isMember ? (
-              <Button onClick={() => joinGroup(group.id)}>Join group</Button>
+              group.requestPending ? (
+                <Button variant="secondary" disabled>
+                  Request pending
+                </Button>
+              ) : (
+                <Button onClick={handleJoin} disabled={busy}>
+                  {group.visibility === "private" ? "Request to join" : "Join group"}
+                </Button>
+              )
             ) : !isOwner ? (
-              <Button variant="secondary" onClick={handleLeave}>
+              <Button variant="secondary" onClick={handleLeave} disabled={busy}>
                 Leave group
               </Button>
             ) : null}
-            {isMember && groupConversation ? (
-              <Button href={`/chat/${groupConversation.id}`} variant="secondary">
+            {isMember && conversationId ? (
+              <Button href={`/chat/${conversationId}`} variant="secondary">
                 <Icon name="message-circle" className="h-4 w-4" />
                 Group chat
               </Button>
@@ -127,7 +176,7 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
               <Tabs
                 ariaLabel="Group sections"
                 items={[
-                  { id: "feed", label: "Group feed", content: <GroupFeed groupId={group.id} /> },
+                  { id: "feed", label: "Group feed", content: <GroupFeed key={group.id} groupId={group.id} /> },
                   { id: "members", label: "Members", content: <GroupMembersView group={group} /> },
                   {
                     id: "about",
@@ -152,10 +201,14 @@ export function GroupDetailView({ groupId }: GroupDetailViewProps) {
       <ConfirmDialog
         open={confirmingDelete}
         title="Delete this group?"
-        description="This can't be undone. Group posts will remain in members' post history but will no longer appear here."
-        onConfirm={() => {
-          deleteGroup(group.id);
+        description="This can't be undone. The group, its feed and its chat will be removed for everyone."
+        onConfirm={async () => {
+          const error = await deleteGroup(group.id);
           setConfirmingDelete(false);
+          if (error) {
+            setActionError(error);
+            return;
+          }
           router.push("/groups");
         }}
         onCancel={() => setConfirmingDelete(false)}

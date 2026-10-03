@@ -1,179 +1,196 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { MOCK_PARTNER_REQUESTS } from "@/lib/mock/mock-partner-requests";
 import { useSocialStore } from "@/context/social-store-context";
+import {
+  closeRequestRequest,
+  createRequestRequest,
+  deleteRequestRequest,
+  editRequestRequest,
+  fetchRequest,
+  fetchRequests,
+  joinRequestRequest,
+  reviewJoinRequestRequest,
+  withdrawJoinRequestRequest,
+} from "@/lib/api/partner";
 import type { PartnerRequest, PartnerRequestFormValues } from "@/types/partner";
 
 export type RequestToJoinResult = "requested" | "already-requested" | "full";
 
+type LoadStatus = "idle" | "loading" | "ready" | "error";
+type LoadError = { message: string; status: number };
+
 type PartnerStoreValue = {
   requests: PartnerRequest[];
+  status: LoadStatus;
+  error: LoadError | null;
+  /** (Re)loads the partner requests from the backend. */
+  refresh: () => Promise<void>;
+  /** Loads one request (and its join requests, for the poster). */
+  loadRequest: (requestId: string) => Promise<LoadError | null>;
   getRequestById: (requestId: string) => PartnerRequest | undefined;
-  createRequest: (input: PartnerRequestFormValues) => PartnerRequest;
-  editRequest: (requestId: string, input: PartnerRequestFormValues) => void;
-  deleteRequest: (requestId: string) => void;
-  closeRequest: (requestId: string) => void;
-  requestToJoin: (requestId: string, message?: string) => RequestToJoinResult;
-  withdrawJoinRequest: (requestId: string) => void;
-  acceptJoinRequest: (requestId: string, userId: string) => void;
-  declineJoinRequest: (requestId: string, userId: string) => void;
+  /** Every mutation resolves with an error message on failure. */
+  createRequest: (input: PartnerRequestFormValues) => Promise<{ request?: PartnerRequest; error?: string }>;
+  editRequest: (requestId: string, input: PartnerRequestFormValues) => Promise<string | undefined>;
+  deleteRequest: (requestId: string) => Promise<string | undefined>;
+  closeRequest: (requestId: string) => Promise<string | undefined>;
+  requestToJoin: (requestId: string, message?: string) => Promise<{ result?: RequestToJoinResult; error?: string }>;
+  withdrawJoinRequest: (requestId: string) => Promise<string | undefined>;
+  /** `joinId` is the join request's own id (`JoinRequest.id`). */
+  acceptJoinRequest: (requestId: string, joinId: string) => Promise<string | undefined>;
+  declineJoinRequest: (requestId: string, joinId: string) => Promise<string | undefined>;
 };
 
 const PartnerStoreContext = createContext<PartnerStoreValue | null>(null);
 
-let localRequestIdCounter = 0;
-
-function nextRequestId(): string {
-  localRequestIdCounter += 1;
-  return `partner-local-${Date.now()}-${localRequestIdCounter}`;
-}
-
-function acceptedCount(request: PartnerRequest): number {
-  return request.joinRequests.filter((join) => join.status === "accepted").length;
-}
-
 /**
- * Session-only mock "backend" for the Adventure Partner module (Partner
- * Requests, Request Detail, Create Request, Join Requests). Nothing here
- * persists beyond the current browser session.
+ * Adventure Partner state, backed by the OUTLY backend (`lib/api/partner.ts`).
+ * The backend keeps spot counts exact (accepting is checked and recorded in
+ * one transaction) and closes a request automatically once it is full.
  */
 export function PartnerStoreProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useSocialStore();
-  const [requests, setRequests] = useState<PartnerRequest[]>(MOCK_PARTNER_REQUESTS);
+  const meId = currentUser.id;
+  const [requests, setRequests] = useState<PartnerRequest[]>([]);
+  const requestsRef = useRef<PartnerRequest[]>([]);
+  const [status, setStatus] = useState<LoadStatus>("idle");
+  const [error, setError] = useState<LoadError | null>(null);
+  const inflight = useRef<Promise<void> | null>(null);
 
-  const getRequestById = useCallback(
-    (requestId: string) => requests.find((request) => request.id === requestId),
-    [requests],
+  const setList = useCallback((updater: (current: PartnerRequest[]) => PartnerRequest[]) => {
+    const next = updater(requestsRef.current);
+    requestsRef.current = next;
+    setRequests(next);
+  }, []);
+
+  const refresh = useCallback((): Promise<void> => {
+    if (inflight.current) return inflight.current;
+    inflight.current = (async () => {
+      setStatus((current) => (current === "ready" ? current : "loading"));
+      const result = await fetchRequests();
+      if (result.ok) {
+        setError(null);
+        setList((current) => {
+          const known = new Map(current.map((request) => [request.id, request]));
+          const merged = result.data.map((request) => {
+            const before = known.get(request.id);
+            return before && before.joinRequests.length > 0 ? { ...request, joinRequests: before.joinRequests } : request;
+          });
+          const fresh = new Set(result.data.map((request) => request.id));
+          return [...merged, ...current.filter((request) => !fresh.has(request.id))];
+        });
+        setStatus("ready");
+      } else {
+        setError({ message: result.message, status: result.status });
+        setStatus("error");
+      }
+    })().finally(() => {
+      inflight.current = null;
+    });
+    return inflight.current;
+  }, [setList]);
+
+  const loadRequest = useCallback(
+    async (requestId: string): Promise<LoadError | null> => {
+      const result = await fetchRequest(requestId, meId);
+      if (!result.ok) return { message: result.message, status: result.status };
+      setList((current) =>
+        current.some((request) => request.id === requestId)
+          ? current.map((request) => (request.id === requestId ? result.data : request))
+          : [result.data, ...current],
+      );
+      return null;
+    },
+    [meId, setList],
   );
+
+  const getRequestById = useCallback((requestId: string) => requests.find((request) => request.id === requestId), [requests]);
 
   const createRequest = useCallback(
-    (input: PartnerRequestFormValues) => {
-      const newRequest: PartnerRequest = {
-        id: nextRequestId(),
-        authorId: currentUser.id,
-        authorName: currentUser.name,
-        activity: input.activity,
-        destination: input.destination.trim(),
-        preferredAt: input.preferredAt,
-        experienceLevel: input.experienceLevel,
-        spots: input.spots,
-        description: input.description.trim(),
-        status: "open",
-        joinRequests: [],
-      };
-      setRequests((current) => [newRequest, ...current]);
-      return newRequest;
+    async (input: PartnerRequestFormValues) => {
+      const result = await createRequestRequest(input);
+      if (!result.ok) return { error: result.message };
+      setList((current) => [result.data, ...current.filter((request) => request.id !== result.data.id)]);
+      return { request: result.data };
     },
-    [currentUser],
+    [setList],
   );
 
-  const editRequest = useCallback((requestId: string, input: PartnerRequestFormValues) => {
-    setRequests((current) =>
-      current.map((request) =>
-        request.id === requestId
-          ? {
-              ...request,
-              activity: input.activity,
-              destination: input.destination.trim(),
-              preferredAt: input.preferredAt,
-              experienceLevel: input.experienceLevel,
-              spots: input.spots,
-              description: input.description.trim(),
-            }
-          : request,
-      ),
-    );
-  }, []);
+  const editRequest = useCallback(
+    async (requestId: string, input: PartnerRequestFormValues) => {
+      const result = await editRequestRequest(requestId, input);
+      if (!result.ok) return result.message;
+      await loadRequest(requestId);
+      return undefined;
+    },
+    [loadRequest],
+  );
 
-  const deleteRequest = useCallback((requestId: string) => {
-    setRequests((current) => current.filter((request) => request.id !== requestId));
-  }, []);
+  const deleteRequest = useCallback(
+    async (requestId: string) => {
+      const result = await deleteRequestRequest(requestId);
+      if (!result.ok) return result.message;
+      setList((current) => current.filter((request) => request.id !== requestId));
+      return undefined;
+    },
+    [setList],
+  );
 
-  const closeRequest = useCallback((requestId: string) => {
-    setRequests((current) =>
-      current.map((request) => (request.id === requestId ? { ...request, status: "closed" } : request)),
-    );
-  }, []);
+  const closeRequest = useCallback(
+    async (requestId: string) => {
+      const result = await closeRequestRequest(requestId);
+      if (!result.ok) return result.message;
+      await loadRequest(requestId);
+      return undefined;
+    },
+    [loadRequest],
+  );
 
   const requestToJoin = useCallback(
-    (requestId: string, message?: string): RequestToJoinResult => {
-      const request = requests.find((candidate) => candidate.id === requestId);
-      if (!request) return "full";
-      if (request.joinRequests.some((join) => join.id === currentUser.id)) return "already-requested";
-      if (acceptedCount(request) >= request.spots) return "full";
-
-      setRequests((current) =>
-        current.map((candidate) =>
-          candidate.id === requestId
-            ? {
-                ...candidate,
-                joinRequests: [
-                  ...candidate.joinRequests,
-                  {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    avatarUrl: currentUser.avatarUrl,
-                    message: message?.trim() || undefined,
-                    status: "pending",
-                  },
-                ],
-              }
-            : candidate,
-        ),
-      );
-      return "requested";
+    async (requestId: string, message?: string) => {
+      const result = await joinRequestRequest(requestId, message?.trim() ?? "");
+      if (!result.ok) {
+        if (result.status === 409) return { result: "full" as RequestToJoinResult };
+        if (/already/i.test(result.message)) return { result: "already-requested" as RequestToJoinResult };
+        return { error: result.message };
+      }
+      await loadRequest(requestId);
+      return { result: "requested" as RequestToJoinResult };
     },
-    [requests, currentUser],
+    [loadRequest],
   );
 
   const withdrawJoinRequest = useCallback(
-    (requestId: string) => {
-      setRequests((current) =>
-        current.map((request) =>
-          request.id === requestId
-            ? { ...request, joinRequests: request.joinRequests.filter((join) => join.id !== currentUser.id) }
-            : request,
-        ),
-      );
+    async (requestId: string) => {
+      const result = await withdrawJoinRequestRequest(requestId);
+      if (!result.ok) return result.message;
+      await loadRequest(requestId);
+      return undefined;
     },
-    [currentUser],
+    [loadRequest],
   );
 
-  const acceptJoinRequest = useCallback((requestId: string, userId: string) => {
-    setRequests((current) =>
-      current.map((request) => {
-        if (request.id !== requestId) return request;
-        const updated: PartnerRequest = {
-          ...request,
-          joinRequests: request.joinRequests.map((join) =>
-            join.id === userId ? { ...join, status: "accepted" as const } : join,
-          ),
-        };
-        return acceptedCount(updated) >= updated.spots ? { ...updated, status: "closed" } : updated;
-      }),
-    );
-  }, []);
+  const review = useCallback(
+    async (requestId: string, joinId: string, accept: boolean) => {
+      const result = await reviewJoinRequestRequest(requestId, joinId, accept);
+      if (!result.ok) return result.status === 409 ? "All spots are already filled." : result.message;
+      await loadRequest(requestId);
+      return undefined;
+    },
+    [loadRequest],
+  );
 
-  const declineJoinRequest = useCallback((requestId: string, userId: string) => {
-    setRequests((current) =>
-      current.map((request) =>
-        request.id === requestId
-          ? {
-              ...request,
-              joinRequests: request.joinRequests.map((join) =>
-                join.id === userId ? { ...join, status: "declined" as const } : join,
-              ),
-            }
-          : request,
-      ),
-    );
-  }, []);
+  const acceptJoinRequest = useCallback((requestId: string, joinId: string) => review(requestId, joinId, true), [review]);
+  const declineJoinRequest = useCallback((requestId: string, joinId: string) => review(requestId, joinId, false), [review]);
 
   const value = useMemo<PartnerStoreValue>(
     () => ({
       requests,
+      status,
+      error,
+      refresh,
+      loadRequest,
       getRequestById,
       createRequest,
       editRequest,
@@ -184,18 +201,7 @@ export function PartnerStoreProvider({ children }: { children: ReactNode }) {
       acceptJoinRequest,
       declineJoinRequest,
     }),
-    [
-      requests,
-      getRequestById,
-      createRequest,
-      editRequest,
-      deleteRequest,
-      closeRequest,
-      requestToJoin,
-      withdrawJoinRequest,
-      acceptJoinRequest,
-      declineJoinRequest,
-    ],
+    [requests, status, error, refresh, loadRequest, getRequestById, createRequest, editRequest, deleteRequest, closeRequest, requestToJoin, withdrawJoinRequest, acceptJoinRequest, declineJoinRequest],
   );
 
   return <PartnerStoreContext.Provider value={value}>{children}</PartnerStoreContext.Provider>;

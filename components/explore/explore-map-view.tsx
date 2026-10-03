@@ -1,19 +1,52 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { MOCK_PLACES } from "@/lib/mock/mock-places";
-import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS } from "@/types/place";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { fetchExplore } from "@/lib/api/places";
+import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS, exploreKey } from "@/types/place";
+import type { ExplorePlace } from "@/types/place";
 
 /**
- * Schematic (not geographically accurate) map view. There is no real map
- * provider/API key wired up in this frontend-only phase, so pins are
- * placed on an illustrative canvas using each place's `mapPosition`
- * percentage. A plain linked list is always shown alongside it as the
+ * Schematic map view. There is no map provider/API key configured, so pins
+ * are placed on an illustrative canvas using positions derived from each
+ * place's real coordinates (`mapPosition`, a percentage of the canvas). A plain linked list is always shown alongside it as the
  * non-map alternative required by the Frontend Responsive & Accessibility
  * guidelines ("Map interactions should have non-map alternatives").
  */
 export function ExploreMapView() {
+  const [places, setPlaces] = useState<ExplorePlace[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchExplore().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setPlaces(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (status === "loading") return <LoadingState message="Loading the map…" />;
+  if (status === "error") {
+    return (
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+        <ErrorState title="We couldn't load the map" description={error} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -48,12 +81,12 @@ export function ExploreMapView() {
           <rect width="100%" height="100%" fill="url(#explore-map-grid)" />
         </svg>
 
-        {MOCK_PLACES.map((place) => {
+        {places.map((place) => {
           const detailHref =
             place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
           return (
             <Link
-              key={place.id}
+              key={exploreKey(place)}
               href={detailHref}
               aria-hidden="true"
               tabIndex={-1}
@@ -72,11 +105,11 @@ export function ExploreMapView() {
           All locations
         </h2>
         <ul className="mt-3 divide-y divide-[var(--outly-border)]">
-          {MOCK_PLACES.map((place) => {
+          {places.map((place) => {
             const detailHref =
               place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
             return (
-              <li key={place.id}>
+              <li key={exploreKey(place)}>
                 <Link
                   href={detailHref}
                   className="flex items-center gap-3 py-3 transition-colors hover:text-[var(--outly-violet)]"

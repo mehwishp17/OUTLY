@@ -38,7 +38,8 @@ export type IconName =
   | "trophy"
   | "lock"
   | "share"
-  | "send";
+  | "send"
+  | "users";
 
 type IconProps = {
   name: IconName;
@@ -294,6 +295,18 @@ export function Icon({ name, className = "h-5 w-5" }: IconProps) {
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+          <path
+            d="M3 19c.4-3 2.8-5 6-5s5.6 2 6 5M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.8.7 2.9 2.2 3.2 4.7"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
           />
         </svg>
       );

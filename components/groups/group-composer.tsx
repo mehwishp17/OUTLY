@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChipButton } from "@/components/ui/chip-button";
+import { FormError } from "@/components/ui/form-error";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { validateGroupForm } from "@/lib/validation/group-schema";
@@ -18,7 +19,8 @@ type GroupComposerProps = {
   description?: string;
   initialValues?: Partial<GroupFormValues>;
   submitLabel: string;
-  onSubmit: (values: GroupFormValues) => void;
+  /** May return a promise resolving to an error message; the form then stays open and shows it. */
+  onSubmit: (values: GroupFormValues) => void | Promise<string | undefined>;
   onCancel: () => void;
 };
 
@@ -38,13 +40,22 @@ export function GroupComposer({
     rules: initialValues?.rules ?? "",
   });
   const [errors, setErrors] = useState<GroupFormErrors>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string>();
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     const validationErrors = validateGroupForm(values);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
-    onSubmit(values);
+    setSubmitting(true);
+    setSubmitError(undefined);
+    const error = await onSubmit(values);
+    if (error) {
+      setSubmitError(error);
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -110,11 +121,15 @@ export function GroupComposer({
           placeholder="e.g. Be respectful, no littering on trails…"
         />
 
+        {submitError ? <FormError id="group-submit-error">{submitError}</FormError> : null}
+
         <div className="flex flex-col gap-3 border-t border-[var(--outly-border)] pt-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit">{submitLabel}</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitLabel}
+          </Button>
         </div>
       </form>
     </div>

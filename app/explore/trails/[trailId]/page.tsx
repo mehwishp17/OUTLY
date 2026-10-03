@@ -17,7 +17,7 @@ export default async function TrailDetailPage({ params }: TrailDetailPageProps) 
   return (
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
-      <ExplorePlaceDetailView placeId={trailId} expectedKind="trail" />
+      <ExplorePlaceDetailView key={trailId} placeId={trailId} expectedKind="trail" />
     </div>
   );
 }

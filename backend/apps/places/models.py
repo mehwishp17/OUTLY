@@ -5,7 +5,7 @@ from django.db import models
 
 from apps.common.models import Difficulty, TimeStamped
 
-CATEGORIES = ["trail", "viewpoint", "campsite", "cycling-route", "wildlife", "water", "other"]
+CATEGORIES = ["trail", "viewpoint", "campsite", "cycling-route", "wildlife"]
 
 
 class Place(TimeStamped):
@@ -44,6 +44,7 @@ class Trail(TimeStamped):
     description = models.TextField(blank=True)
     location = models.CharField(max_length=200)
     place = models.ForeignKey(Place, on_delete=models.SET_NULL, null=True, blank=True, related_name="trails")
+    category = models.CharField(max_length=30, default="trail", db_index=True)
     start_latitude = models.FloatField(null=True, blank=True, validators=[MinValueValidator(-90), MaxValueValidator(90)])
     start_longitude = models.FloatField(null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     difficulty = models.CharField(max_length=10, choices=Difficulty.choices, blank=True)
@@ -84,10 +85,20 @@ class TrailPoint(models.Model):
 
 
 class SavedPlace(models.Model):
+    """A bookmarked place OR trail (exactly one of the two is set)."""
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_places")
-    place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name="saves")
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, null=True, blank=True, related_name="saves")
+    trail = models.ForeignKey(Trail, on_delete=models.CASCADE, null=True, blank=True, related_name="saves")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["user", "place"], name="savedplace_unique")]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "place"], condition=models.Q(place__isnull=False), name="savedplace_unique"),
+            models.UniqueConstraint(fields=["user", "trail"], condition=models.Q(trail__isnull=False), name="savedtrail_unique"),
+            models.CheckConstraint(
+                condition=(models.Q(place__isnull=False, trail__isnull=True) | models.Q(place__isnull=True, trail__isnull=False)),
+                name="saved_exactly_one_target",
+            ),
+        ]
         indexes = [models.Index(fields=["user", "-created_at"])]

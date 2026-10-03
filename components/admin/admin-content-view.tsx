@@ -1,31 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useAdminStore } from "@/context/admin-store-context";
-import { useSocialStore } from "@/context/social-store-context";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { fetchAdminPosts, setPostStatusRequest } from "@/lib/api/admin";
+import type { AdminPost } from "@/lib/api/admin";
 import { formatRelativeTime } from "@/lib/utils";
 
-/** Admin Content: every post across the platform (Home Feed and every
- * Group Feed), with hide/unhide and delete moderation actions — reusing
- * `deletePost`/`setPostHidden` from the same `social-store-context` the
- * Feed module already uses, rather than a parallel content store. */
+/** Admin Content (moderators): every post across the platform (Home Feed
+ * and every Group Feed), with hide/unhide and delete moderation actions.
+ * Hidden posts disappear from everyone's feeds but stay here, reversibly. */
 export function AdminContentView() {
-  const { posts, deletePost, setPostHidden } = useSocialStore();
-  const { logAction } = useAdminStore();
+  const [allPosts, setAllPosts] = useState<AdminPost[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((key) => key + 1);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAdminPosts().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setAllPosts(result.data);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const posts = allPosts
+    .filter((post) => post.status !== "DELETED")
+    .map((post) => ({ ...post, hidden: post.status === "HIDDEN" }));
 
   const sorted = [...posts].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
-  function handleToggleHidden(postId: string, content: string, hidden: boolean) {
-    setPostHidden(postId, hidden);
-    const label = content.length > 60 ? `${content.slice(0, 60)}…` : content;
-    logAction(hidden ? "post_hidden" : "post_unhidden", label);
+  async function changeStatus(postId: string, next: "ACTIVE" | "HIDDEN" | "DELETED") {
+    setActionError(undefined);
+    const result = await setPostStatusRequest(postId, next);
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    reload();
+  }
+
+  function handleToggleHidden(postId: string, _content: string, hidden: boolean) {
+    void changeStatus(postId, hidden ? "HIDDEN" : "ACTIVE");
   }
 
   return (
@@ -41,7 +76,17 @@ export function AdminContentView() {
 
       <AdminNav active="/admin/content" />
 
-      {sorted.length === 0 ? (
+      {actionError ? (
+        <p role="alert" className="text-sm text-[#B3164C]">
+          {actionError}
+        </p>
+      ) : null}
+
+      {status === "loading" ? (
+        <LoadingState message="Loading posts…" />
+      ) : status === "error" ? (
+        <ErrorState title="We couldn't load posts" description={error} />
+      ) : sorted.length === 0 ? (
         <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-10 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
           No posts yet.
         </p>
@@ -69,7 +114,7 @@ export function AdminContentView() {
                 <p className="mt-1 line-clamp-2 text-sm text-[var(--outly-muted)]">{post.content}</p>
                 <div className="mt-2 flex items-center gap-3 text-xs text-[var(--outly-muted)]">
                   <span>{formatRelativeTime(post.createdAt)}</span>
-                  <span>{post.comments.length} comments</span>
+                  <span>{post.commentCount} comments</span>
                   <Link href={`/feed/${post.id}`} className="font-semibold text-[var(--outly-violet)] hover:text-[var(--outly-purple-dark)]">
                     View
                   </Link>
@@ -98,7 +143,7 @@ export function AdminContentView() {
         title="Delete this post?"
         description="This can't be undone."
         onConfirm={() => {
-          if (confirmingDeleteId) deletePost(confirmingDeleteId);
+          if (confirmingDeleteId) void changeStatus(confirmingDeleteId, "DELETED");
           setConfirmingDeleteId(null);
         }}
         onCancel={() => setConfirmingDeleteId(null)}

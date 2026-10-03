@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PostComposer } from "@/components/feed/post-composer";
 import { useGroupStore } from "@/context/group-store-context";
@@ -13,10 +14,14 @@ type CreatePostViewProps = {
 
 export function CreatePostView({ groupId }: CreatePostViewProps) {
   const router = useRouter();
-  const { createPost, createBackendPost } = useSocialStore();
-  const { getGroupById } = useGroupStore();
+  const { createPost } = useSocialStore();
+  const { getGroupById, loadGroup } = useGroupStore();
   const group = groupId ? getGroupById(groupId) : undefined;
   const backHref = group ? `/groups/${group.id}` : "/feed";
+
+  useEffect(() => {
+    if (groupId) void loadGroup(groupId);
+  }, [groupId, loadGroup]);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-12">
@@ -28,18 +33,11 @@ export function CreatePostView({ groupId }: CreatePostViewProps) {
             : "Share what's happening with the OUTLY community."
         }
         submitLabel="Post"
-        captionOnly={!group}
         onCancel={() => router.push(backHref)}
         onSubmit={async (values) => {
-          if (group) {
-            // Group posts are not backed by the API yet (no group endpoints).
-            createPost({ ...values, groupId: group.id });
-            router.push(`/groups/${group.id}`);
-            return undefined;
-          }
-          const { post, error } = await createBackendPost(values.content);
+          const { post, error } = await createPost({ ...values, groupId: group?.id });
           if (error || !post) return error;
-          router.push(`/feed/${post.id}`);
+          router.push(group ? `/groups/${group.id}` : `/feed/${post.id}`);
           return undefined;
         }}
       />

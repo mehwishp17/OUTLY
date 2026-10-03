@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { callBackend } from "@/lib/api/client";
 
 type ShareButtonProps = {
   postId: string;
 };
 
 /**
- * Share a post's link. Frontend-only: it uses the browser's native share
- * sheet when available and otherwise copies `/feed/<id>` to the clipboard.
- * Nothing is sent to the backend (it has no share endpoint).
+ * Share a post's link: the browser's native share sheet when available,
+ * otherwise the link `/feed/<id>` is copied to the clipboard. Each share is
+ * also counted by the backend (public posts only; a refusal is ignored).
  */
 export function ShareButton({ postId }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
@@ -25,9 +26,11 @@ export function ShareButton({ postId }: ShareButtonProps) {
     try {
       if (navigator.share) {
         await navigator.share({ url, title: "OUTLY" });
+        void callBackend("POST", `posts/${postId}/share`);
         return;
       }
       await navigator.clipboard.writeText(url);
+      void callBackend("POST", `posts/${postId}/share`);
       setCopied(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1800);

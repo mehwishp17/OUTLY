@@ -7,8 +7,8 @@ import { SaveButton } from "@/components/social/save-button";
 import { CoverImage } from "@/components/ui/cover-image";
 import { Icon } from "@/components/ui/icon";
 import { useSocialStore } from "@/context/social-store-context";
-import { PLACE_PHOTOS } from "@/lib/adventure-images";
-import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS } from "@/types/place";
+import { PHOTO_POSITIONS } from "@/lib/adventure-images";
+import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS, exploreKey, exploreMeta } from "@/types/place";
 import type { ExplorePlace } from "@/types/place";
 
 type PlaceCardProps = {
@@ -21,8 +21,8 @@ type PlaceCardProps = {
 export function PlaceCard({ place }: PlaceCardProps) {
   const { isPlaceSaved, toggleSavePlace } = useSocialStore();
   const detailHref = place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
-  const saved = isPlaceSaved(place.id);
-  const photo = PLACE_PHOTOS[place.id];
+  const saved = isPlaceSaved(exploreKey(place));
+  const photo = place.photo;
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white shadow-[var(--shadow-soft)] transition-all duration-200 group hover:-translate-y-1 hover:shadow-[var(--shadow-elevated)] motion-reduce:transition-none motion-reduce:hover:translate-y-0">
@@ -34,7 +34,7 @@ export function PlaceCard({ place }: PlaceCardProps) {
           aria-label={`${place.name} — illustrative terrain visual`}
         >
           {photo ? (
-            <CoverImage src={photo} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" />
+            <CoverImage src={photo} position={PHOTO_POSITIONS[photo]} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" />
           ) : (
             <svg
               className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full opacity-70"
@@ -66,7 +66,7 @@ export function PlaceCard({ place }: PlaceCardProps) {
           <Link href={detailHref} className="min-w-0">
             <h3 className="truncate text-lg font-semibold text-[var(--outly-ink)]">{place.name}</h3>
           </Link>
-          <SaveButton saved={saved} onToggle={() => toggleSavePlace(toSavedPlace(place))} />
+          <SaveButton saved={saved} onToggle={() => toggleSavePlace(place)} />
         </div>
         <p className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-[var(--outly-violet)]">
           <Icon name="pin" className="h-3.5 w-3.5" />
@@ -77,23 +77,12 @@ export function PlaceCard({ place }: PlaceCardProps) {
         </p>
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <DifficultyBadge difficulty={place.difficulty} />
-          <span className="text-xs text-[var(--outly-muted)]">
-            {place.distanceKm} km · {place.durationLabel}
-          </span>
+          {place.difficulty ? <DifficultyBadge difficulty={place.difficulty} /> : null}
+          <span className="text-xs text-[var(--outly-muted)]">{exploreMeta(place)}</span>
         </div>
 
         <StarRating rating={place.rating} reviewCount={place.reviewCount} className="pt-1" />
       </div>
     </article>
   );
-}
-
-function toSavedPlace(place: ExplorePlace) {
-  return {
-    id: place.id,
-    title: place.name,
-    location: place.location,
-    category: PLACE_CATEGORY_LABELS[place.category],
-  };
 }

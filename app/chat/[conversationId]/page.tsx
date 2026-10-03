@@ -17,7 +17,7 @@ export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
   return (
     <div className="min-h-svh bg-[var(--outly-lavender)]">
       <AppHeader />
-      <ChatDetailView conversationId={conversationId} />
+      <ChatDetailView key={conversationId} conversationId={conversationId} />
     </div>
   );
 }

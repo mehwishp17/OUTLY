@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChipButton } from "@/components/ui/chip-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MOCK_PLACES } from "@/lib/mock/mock-places";
+import { FormError } from "@/components/ui/form-error";
+import { fetchExplore } from "@/lib/api/places";
 import { validateActivityForm } from "@/lib/validation/activity-schema";
 import { ACTIVITY_PRIVACY_LABELS, ACTIVITY_TYPE_LABELS } from "@/types/activity";
 import type {
@@ -15,8 +16,8 @@ import type {
   ActivityStatus,
   CreateActivityInput,
 } from "@/types/activity";
-import { DIFFICULTY_LABELS } from "@/types/place";
-import type { Difficulty } from "@/types/place";
+import { DIFFICULTY_LABELS, exploreKey } from "@/types/place";
+import type { Difficulty, ExplorePlace } from "@/types/place";
 
 const ACTIVITY_TYPE_OPTIONS = Object.keys(ACTIVITY_TYPE_LABELS) as ActivityKind[];
 const PRIVACY_OPTIONS = Object.keys(ACTIVITY_PRIVACY_LABELS) as ActivityPrivacy[];
@@ -36,7 +37,9 @@ type ActivityComposerProps = {
   description?: string;
   initialValues?: Partial<CreateActivityInput>;
   submitLabel: string;
-  onSubmit: (values: CreateActivityInput) => void;
+  /** May return a promise resolving to an error message; the form then stays
+   * open and shows it instead of navigating away. */
+  onSubmit: (values: CreateActivityInput) => void | Promise<string | undefined>;
   onCancel: () => void;
 };
 
@@ -62,17 +65,38 @@ export function ActivityComposer({
     status: initialValues?.status ?? "planned",
   });
   const [errors, setErrors] = useState<ActivityFormErrors>({});
+  const [places, setPlaces] = useState<ExplorePlace[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string>();
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  // The places and trails an activity can be linked to come from Explore.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchExplore().then((result) => {
+      if (!cancelled && result.ok) setPlaces(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
     const validationErrors = validateActivityForm(values);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) return;
-    onSubmit(values);
+    setSubmitting(true);
+    setSubmitError(undefined);
+    const error = await onSubmit(values);
+    if (error) {
+      setSubmitError(error);
+      setSubmitting(false);
+    }
   }
 
   function handlePlaceChange(placeId: string) {
-    const place = MOCK_PLACES.find((candidate) => candidate.id === placeId);
+    const place = places.find((candidate) => exploreKey(candidate) === placeId);
     setValues((current) => ({
       ...current,
       placeId: placeId || undefined,
@@ -123,8 +147,8 @@ export function ActivityComposer({
             className="w-full rounded-[var(--radius-sm)] border border-[var(--outly-border)] bg-white px-4 py-2.5 text-sm text-[var(--outly-ink)] shadow-[var(--shadow-soft)] transition-colors focus:border-[var(--outly-violet)] focus:outline-none"
           >
             <option value="">None</option>
-            {MOCK_PLACES.map((place) => (
-              <option key={place.id} value={place.id}>
+            {places.map((place) => (
+              <option key={exploreKey(place)} value={exploreKey(place)}>
                 {place.name}
               </option>
             ))}
@@ -244,11 +268,15 @@ export function ActivityComposer({
           </div>
         </div>
 
+        {submitError ? <FormError id="activity-submit-error">{submitError}</FormError> : null}
+
         <div className="flex flex-col gap-3 border-t border-[var(--outly-border)] pt-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit">{submitLabel}</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitLabel}
+          </Button>
         </div>
       </form>
     </div>

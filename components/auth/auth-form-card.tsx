@@ -1,4 +1,9 @@
+import { AuthIconBadge } from "@/components/auth/auth-icon-badge";
+import type { IconName } from "@/components/ui/icon";
+
 type AuthFormCardProps = {
+  /** Optional round icon above the heading (used by the password-recovery screens). */
+  icon?: IconName;
   eyebrow?: string;
   title: string;
   description?: string;
@@ -10,9 +15,10 @@ type AuthFormCardProps = {
  * `SectionHeading` from the landing page, but left-aligned and sized for
  * a narrow form column).
  */
-export function AuthFormCard({ eyebrow, title, description, children }: AuthFormCardProps) {
+export function AuthFormCard({ icon, eyebrow, title, description, children }: AuthFormCardProps) {
   return (
     <div>
+      {icon ? <AuthIconBadge name={icon} /> : null}
       {eyebrow ? (
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--outly-violet)]">
           {eyebrow}

@@ -14,11 +14,10 @@ type CommentComposerProps = {
 
 /** Compact "add a comment" form shown under a post's comment list. */
 export function CommentComposer({ postId }: CommentComposerProps) {
-  const { currentUser, addComment, addBackendComment, getPostById } = useSocialStore();
+  const { currentUser, addComment } = useSocialStore();
   const [content, setContent] = useState("");
   const [error, setError] = useState<string>();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isPersisted = Boolean(getPostById(postId)?.persisted);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,16 +26,12 @@ export function CommentComposer({ postId }: CommentComposerProps) {
     setError(validationError);
     if (validationError) return;
 
-    if (isPersisted) {
-      setIsSubmitting(true);
-      const backendError = await addBackendComment(postId, content);
-      setIsSubmitting(false);
-      if (backendError) {
-        setError(backendError);
-        return;
-      }
-    } else {
-      addComment(postId, content);
+    setIsSubmitting(true);
+    const backendError = await addComment(postId, content);
+    setIsSubmitting(false);
+    if (backendError) {
+      setError(backendError);
+      return;
     }
     setContent("");
   }

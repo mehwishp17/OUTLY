@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExploreFilters } from "@/components/explore/explore-filters";
 import { PlaceCard } from "@/components/explore/place-card";
 import { Icon } from "@/components/ui/icon";
-import { MOCK_PLACES } from "@/lib/mock/mock-places";
-import type { Difficulty, PlaceCategory } from "@/types/place";
+import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { fetchExplore } from "@/lib/api/places";
+import { exploreKey } from "@/types/place";
+import type { Difficulty, ExplorePlace, PlaceCategory } from "@/types/place";
 
 /** Explore Home: combines search, category/difficulty filters, and the
  * results grid on one screen (Search and Filters function as capabilities
@@ -18,22 +22,33 @@ export function ExploreView() {
   const [category, setCategory] = useState<PlaceCategory | "all">("all");
   const [difficulty, setDifficulty] = useState<Difficulty | "all">("all");
 
-  const filteredPlaces = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const [places, setPlaces] = useState<ExplorePlace[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState<string>();
+  const [reloadCount, setReloadCount] = useState(0);
 
-    return MOCK_PLACES.filter((place) => {
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        place.name.toLowerCase().includes(normalizedQuery) ||
-        place.location.toLowerCase().includes(normalizedQuery) ||
-        place.description.toLowerCase().includes(normalizedQuery);
+  // Search and filters are applied by the backend; typing is debounced.
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const result = await fetchExplore({ search: query, category, difficulty });
+      if (cancelled) return;
+      if (result.ok) {
+        setPlaces(result.data);
+        setError(undefined);
+        setStatus("ready");
+      } else {
+        setError(result.message);
+        setStatus("error");
+      }
+    }, query ? 300 : 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, category, difficulty, reloadCount]);
 
-      const matchesCategory = category === "all" || place.category === category;
-      const matchesDifficulty = difficulty === "all" || place.difficulty === difficulty;
-
-      return matchesQuery && matchesCategory && matchesDifficulty;
-    });
-  }, [query, category, difficulty]);
+  const filteredPlaces = places;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -64,14 +79,26 @@ export function ExploreView() {
         onDifficultyChange={setDifficulty}
       />
 
-      {filteredPlaces.length === 0 ? (
+      {status === "loading" && places.length === 0 ? (
+        <LoadingState message="Loading places and trails…" />
+      ) : status === "error" && places.length === 0 ? (
+        <ErrorState
+          title="We couldn't load Explore"
+          description={error}
+          action={
+            <Button variant="secondary" onClick={() => setReloadCount((count) => count + 1)}>
+              Try again
+            </Button>
+          }
+        />
+      ) : filteredPlaces.length === 0 ? (
         <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-10 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
           No trails or places match your search and filters. Try clearing a filter.
         </p>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filteredPlaces.map((place) => (
-            <PlaceCard key={place.id} place={place} />
+            <PlaceCard key={exploreKey(place)} place={place} />
           ))}
         </div>
       )}

@@ -8,14 +8,15 @@ import { FormError } from "@/components/ui/form-error";
 type AvatarUploadProps = {
   name: string;
   avatarUrl?: string;
-  onChange: (avatarUrl: string | undefined) => void;
+  /** `file` is the newly chosen image (to be uploaded when the profile is saved). */
+  onChange: (avatarUrl: string | undefined, file?: File) => void;
 };
 
 /**
- * Local-only avatar preview. Selecting a file creates an in-memory object
- * URL (`URL.createObjectURL`) purely for immediate preview — nothing is
- * ever uploaded to a server. "Remove photo" reverts to the initials
- * fallback. Rejects non-image files with an accessible inline error.
+ * Avatar picker. Selecting a file shows an immediate local preview and hands
+ * the file to the parent, which uploads it when the profile is saved.
+ * "Remove photo" reverts to the initials fallback. Rejects non-image files
+ * with an accessible inline error.
  */
 export function AvatarUpload({ name, avatarUrl, onChange }: AvatarUploadProps) {
   const [error, setError] = useState<string>();
@@ -34,7 +35,7 @@ export function AvatarUpload({ name, avatarUrl, onChange }: AvatarUploadProps) {
 
     setError(undefined);
     const previewUrl = URL.createObjectURL(file);
-    onChange(previewUrl);
+    onChange(previewUrl, file);
   }
 
   function handleRemove() {
@@ -75,7 +76,7 @@ export function AvatarUpload({ name, avatarUrl, onChange }: AvatarUploadProps) {
           onChange={handleFileSelected}
         />
         <p className="text-xs text-[var(--outly-muted)]">
-          Stored only in this browser session — never uploaded to a server.
+          JPG, PNG or WebP, up to 5 MB.
         </p>
         {error ? <FormError id={errorId}>{error}</FormError> : null}
       </div>

@@ -1,5 +1,8 @@
 # OUTLY — Authentication (Phase 2)
 
+> **Note:** this document describes the original frontend-only prototype. The app is now connected to the Django backend — see [backend-integration.md](./backend-integration.md) for the current behaviour.
+
+
 ## Status: frontend-only, fully mocked
 
 Everything under `/login`, `/signup`, `/forgot-password`, `/verify-email`,

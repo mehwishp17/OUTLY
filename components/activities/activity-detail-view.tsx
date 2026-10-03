@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
@@ -8,10 +8,13 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Icon } from "@/components/ui/icon";
 import { useActivityStore } from "@/context/activity-store-context";
 import { useSocialStore } from "@/context/social-store-context";
-import { getExplorePlaceById } from "@/lib/mock/mock-places";
+import { displayPerson } from "@/lib/user-directory";
+import { fetchExploreItem } from "@/lib/api/places";
+import type { ExplorePlace } from "@/types/place";
 import { ACTIVITY_PRIVACY_LABELS, ACTIVITY_TYPE_ICONS, ACTIVITY_TYPE_LABELS } from "@/types/activity";
 
 type ActivityDetailViewProps = {
@@ -31,9 +34,40 @@ function formatDateTime(iso: string): string {
 export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getActivityById, deleteActivity, toggleParticipation } = useActivityStore();
+  const { getActivityById, deleteActivity, toggleParticipation, loadActivity } = useActivityStore();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [actionError, setActionError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [linked, setLinked] = useState<{ key: string; place?: ExplorePlace }>();
   const activity = getActivityById(activityId);
+  const linkedKey = activity?.placeId;
+  const linkedPlace = linked && linked.key === linkedKey ? linked.place : undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadActivity(activityId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activityId, loadActivity]);
+
+  // The place or trail this activity is linked to (key like "place-3" or "trail-5").
+  useEffect(() => {
+    if (!linkedKey) return;
+    const [kind, id] = linkedKey.split("-");
+    let cancelled = false;
+    void fetchExploreItem(kind === "trail" ? "trail" : "place", id).then((result) => {
+      if (!cancelled) setLinked({ key: linkedKey, place: result.ok ? result.data : undefined });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedKey]);
+
+  if (!activity && loading) return <LoadingState message="Loading activity…" />;
 
   if (!activity) {
     return (
@@ -55,7 +89,6 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
 
   const isCreator = activity.creatorId === currentUser.id;
   const isParticipant = activity.participants.some((p) => p.id === currentUser.id);
-  const linkedPlace = activity.placeId ? getExplorePlaceById(activity.placeId) : undefined;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -81,7 +114,7 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
                 {activity.title}
               </h1>
               <p className="text-sm text-[var(--outly-muted)]">
-                {ACTIVITY_TYPE_LABELS[activity.type]} · Organized by {activity.creatorName}
+                {ACTIVITY_TYPE_LABELS[activity.type]} · Organized by {isCreator ? currentUser.name || "You" : activity.creatorName}
               </p>
             </div>
           </div>
@@ -122,7 +155,8 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
             <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
               When
             </dt>
-            <dd className="mt-1 text-sm text-[var(--outly-ink)]">{formatDateTime(activity.startAt)}</dd>
+            {/* Locale/timezone differ between server and browser. */}
+            <dd suppressHydrationWarning className="mt-1 text-sm text-[var(--outly-ink)]">{formatDateTime(activity.startAt)}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
@@ -168,25 +202,37 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
 
         <div className="mt-6 border-t border-[var(--outly-border)] pt-5">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
-            Participants ({activity.participants.length})
+            Participants ({activity.participantCount})
           </h2>
           <ul className="mt-3 flex flex-wrap gap-3">
             {activity.participants.map((participant) => (
               <li key={participant.id} className="flex items-center gap-2">
-                <Avatar name={participant.name} avatarUrl={participant.avatarUrl} size="sm" />
-                <span className="text-sm text-[var(--outly-ink)]">{participant.name}</span>
+                <Avatar name={displayPerson(participant, currentUser).name} avatarUrl={displayPerson(participant, currentUser).avatarUrl} size="sm" />
+                <span className="text-sm text-[var(--outly-ink)]">{displayPerson(participant, currentUser).name}</span>
               </li>
             ))}
           </ul>
 
-          {!isCreator ? (
+          {!isCreator && activity.status === "planned" ? (
             <Button
               variant={isParticipant ? "secondary" : "primary"}
               className="mt-5"
-              onClick={() => toggleParticipation(activity.id)}
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setActionError(undefined);
+                const error = await toggleParticipation(activity.id);
+                setBusy(false);
+                if (error) setActionError(error);
+              }}
             >
               {isParticipant ? "Leave activity" : "Join activity"}
             </Button>
+          ) : null}
+          {actionError ? (
+            <p role="alert" className="mt-3 text-sm text-[#B3164C]">
+              {actionError}
+            </p>
           ) : null}
         </div>
       </div>
@@ -195,9 +241,13 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
         open={confirmingDelete}
         title="Delete this activity?"
         description="This can't be undone."
-        onConfirm={() => {
-          deleteActivity(activity.id);
+        onConfirm={async () => {
+          const error = await deleteActivity(activity.id);
           setConfirmingDelete(false);
+          if (error) {
+            setActionError(error);
+            return;
+          }
           router.push("/activities");
         }}
         onCancel={() => setConfirmingDelete(false)}

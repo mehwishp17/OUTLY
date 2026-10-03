@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { ActivityCard } from "@/components/activities/activity-card";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { Tabs } from "@/components/ui/tabs";
 import { useActivityStore } from "@/context/activity-store-context";
 import type { Activity } from "@/types/activity";
@@ -35,10 +38,31 @@ function ActivityGroup({ activities }: { activities: Activity[] }) {
  * Activity List and Activity History screens on one route since they're
  * the same underlying data, filtered differently. */
 export function ActivityListView() {
-  const { activities } = useActivityStore();
+  const { activities, status, error, refresh } = useActivityStore();
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   const sorted = sortByStartAtDesc(activities);
   const upcoming = sorted.filter((activity) => activity.status === "planned");
   const completed = sorted.filter((activity) => activity.status === "completed");
+
+  // Loading/error show inside the tabs, so the selected tab survives the data arriving.
+  const notice =
+    status === "loading" && activities.length === 0 ? (
+        <LoadingState message="Loading activities…" />
+    ) : status === "error" && activities.length === 0 ? (
+        <ErrorState
+          title="We couldn't load activities"
+          description={error?.message}
+          action={
+            <Button variant="secondary" onClick={() => void refresh()}>
+              Try again
+            </Button>
+          }
+        />
+    ) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
@@ -60,9 +84,9 @@ export function ActivityListView() {
       <Tabs
         ariaLabel="Activity filters"
         items={[
-          { id: "upcoming", label: `Upcoming (${upcoming.length})`, content: <ActivityGroup activities={upcoming} /> },
-          { id: "completed", label: `Completed (${completed.length})`, content: <ActivityGroup activities={completed} /> },
-          { id: "all", label: "All", content: <ActivityGroup activities={sorted} /> },
+          { id: "upcoming", label: `Upcoming (${upcoming.length})`, content: notice ?? <ActivityGroup activities={upcoming} /> },
+          { id: "completed", label: `Completed (${completed.length})`, content: notice ?? <ActivityGroup activities={completed} /> },
+          { id: "all", label: "All", content: notice ?? <ActivityGroup activities={sorted} /> },
         ]}
       />
 

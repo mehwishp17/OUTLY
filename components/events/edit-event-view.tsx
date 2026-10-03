@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EventComposer } from "@/components/events/event-composer";
 import { Icon } from "@/components/ui/icon";
+import { LoadingState } from "@/components/ui/loading-state";
 import { useEventStore } from "@/context/event-store-context";
 import { useSocialStore } from "@/context/social-store-context";
 
@@ -14,8 +16,21 @@ type EditEventViewProps = {
 export function EditEventView({ eventId }: EditEventViewProps) {
   const router = useRouter();
   const { currentUser } = useSocialStore();
-  const { getEventById, editEvent } = useEventStore();
+  const { getEventById, editEvent, loadEvent } = useEventStore();
   const event = getEventById(eventId);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadEvent(eventId).then(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, loadEvent]);
+
+  if (!event && loading) return <LoadingState message="Loading event…" />;
 
   if (!event || event.organizerId !== currentUser.id) {
     return (
@@ -46,9 +61,11 @@ export function EditEventView({ eventId }: EditEventViewProps) {
         submitLabel="Save changes"
         initialValues={event}
         onCancel={() => router.push(`/events/${event.id}`)}
-        onSubmit={(values) => {
-          editEvent(event.id, values);
+        onSubmit={async (values) => {
+          const error = await editEvent(event.id, values);
+          if (error) return error;
           router.push(`/events/${event.id}`);
+          return undefined;
         }}
       />
     </div>
