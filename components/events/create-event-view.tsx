@@ -15,8 +15,8 @@ export function CreateEventView() {
         description="Organize a group hike, cleanup, or meetup for the OUTLY community."
         submitLabel="Create event"
         onCancel={() => router.push("/events")}
-        onSubmit={async (values) => {
-          const { event, error } = await createEvent(values);
+        onSubmit={async (values, onUploadProgress) => {
+          const { event, error } = await createEvent(values, onUploadProgress);
           if (error || !event) return error;
           router.push(`/events/${event.id}`);
           return undefined;

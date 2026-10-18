@@ -31,8 +31,15 @@ type EventStoreValue = {
   loadEvent: (eventId: string) => Promise<LoadError | null>;
   getEventById: (eventId: string) => OutlyEvent | undefined;
   /** Every mutation resolves with an error message on failure. */
-  createEvent: (input: EventFormValues) => Promise<{ event?: OutlyEvent; error?: string }>;
-  editEvent: (eventId: string, input: EventFormValues) => Promise<string | undefined>;
+  createEvent: (
+    input: EventFormValues,
+    onUploadProgress?: (percent: number) => void,
+  ) => Promise<{ event?: OutlyEvent; error?: string }>;
+  editEvent: (
+    eventId: string,
+    input: EventFormValues,
+    onUploadProgress?: (percent: number) => void,
+  ) => Promise<string | undefined>;
   deleteEvent: (eventId: string) => Promise<string | undefined>;
   cancelEvent: (eventId: string) => Promise<string | undefined>;
   /** The backend checks capacity inside a transaction, so "full" is authoritative. */
@@ -108,8 +115,8 @@ export function EventStoreProvider({ children }: { children: ReactNode }) {
   const getEventById = useCallback((eventId: string) => events.find((event) => event.id === eventId), [events]);
 
   const createEvent = useCallback(
-    async (input: EventFormValues) => {
-      const result = await createEventRequest(input);
+    async (input: EventFormValues, onUploadProgress?: (percent: number) => void) => {
+      const result = await createEventRequest(input, onUploadProgress);
       if (!result.ok) return { error: result.message };
       setList((current) => [result.data, ...current.filter((event) => event.id !== result.data.id)]);
       return { event: result.data };
@@ -118,8 +125,8 @@ export function EventStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const editEvent = useCallback(
-    async (eventId: string, input: EventFormValues) => {
-      const result = await editEventRequest(eventId, input);
+    async (eventId: string, input: EventFormValues, onUploadProgress?: (percent: number) => void) => {
+      const result = await editEventRequest(eventId, input, onUploadProgress);
       if (!result.ok) return result.message;
       await loadEvent(eventId);
       return undefined;

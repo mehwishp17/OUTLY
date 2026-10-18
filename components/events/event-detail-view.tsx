@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
+import { EventCover } from "@/components/events/event-cover";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -125,7 +126,13 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
         Back to events
       </Link>
 
-      <div className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white shadow-[var(--shadow-soft)]">
+        {event.coverUrl ? (
+          <div className="relative aspect-[16/9] w-full overflow-hidden bg-[var(--outly-lavender)]">
+            <EventCover src={event.coverUrl} alt={`Cover image for ${event.title}`} className="group-hover:scale-100" />
+          </div>
+        ) : null}
+        <div className="p-6 sm:p-8">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <span
@@ -263,6 +270,7 @@ export function EventDetailView({ eventId }: EventDetailViewProps) {
               ) : null
             ) : null}
           </div>
+        </div>
         </div>
       </div>
 

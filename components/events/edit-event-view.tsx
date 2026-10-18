@@ -61,8 +61,8 @@ export function EditEventView({ eventId }: EditEventViewProps) {
         submitLabel="Save changes"
         initialValues={event}
         onCancel={() => router.push(`/events/${event.id}`)}
-        onSubmit={async (values) => {
-          const error = await editEvent(event.id, values);
+        onSubmit={async (values, onUploadProgress) => {
+          const error = await editEvent(event.id, values, onUploadProgress);
           if (error) return error;
           router.push(`/events/${event.id}`);
           return undefined;

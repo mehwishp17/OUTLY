@@ -41,6 +41,8 @@ export type OutlyEvent = {
   requiresApproval: boolean;
   visibility: EventVisibility;
   status: EventStatus;
+  /** Cover image served by the backend (absolute URL); absent when the organizer didn't add one. */
+  coverUrl?: string;
   /** Moderation state: events may need a moderator's approval before they are open. */
   approvalStatus: "pending" | "approved" | "rejected";
   /** Confirmed participants (always present, including in list responses). */
@@ -63,9 +65,13 @@ export type EventFormValues = {
   difficulty?: Difficulty;
   requiresApproval: boolean;
   visibility: EventVisibility;
+  /** A newly chosen cover image to upload (create or replace). */
+  coverFile?: File | null;
+  /** True when the organizer removed the existing cover without choosing a new one. */
+  removeCover?: boolean;
 };
 
-export type EventFormErrors = Partial<Record<"title" | "location" | "startAt" | "capacity", string>>;
+export type EventFormErrors = Partial<Record<"title" | "location" | "startAt" | "capacity" | "cover", string>>;
 
 export const EVENT_CATEGORY_LABELS: Record<EventCategory, string> = {
   hike: "Hike",
