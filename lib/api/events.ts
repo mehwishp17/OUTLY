@@ -42,6 +42,7 @@ type BackendEvent = {
   approval_status?: string;
   approved_count?: number;
   my_status?: string | null;
+  cover_image?: string | null;
 };
 
 type BackendParticipant = { user_id: number; username: string; display_name?: string; status: string };
@@ -94,6 +95,7 @@ export function mapEvent(raw: BackendEvent): OutlyEvent {
     requiresApproval: raw.requires_approval,
     visibility: VISIBILITY_FROM[raw.visibility] ?? "public",
     status: statusOf(raw),
+    coverUrl: raw.cover_image || undefined,
     approvalStatus: (raw.approval_status ?? "APPROVED").toLowerCase() as OutlyEvent["approvalStatus"],
     goingCount: raw.approved_count ?? 0,
     myStatus: raw.my_status ? PARTICIPANT_FROM[raw.my_status] : undefined,
@@ -130,6 +132,22 @@ function toBody(values: EventFormValues): Record<string, unknown> {
   return body;
 }
 
+/** JSON normally; multipart when a cover file is being uploaded (the backend accepts both). */
+function toRequestBody(values: EventFormValues): Record<string, unknown> | FormData {
+  const body = toBody(values);
+  if (values.coverFile) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(body)) {
+      // null (no place/trail) is sent as an empty value, which the backend reads as null.
+      form.append(key, value === null ? "" : String(value));
+    }
+    form.append("cover", values.coverFile);
+    return form;
+  }
+  if (values.removeCover) body.remove_cover = true;
+  return body;
+}
+
 const withMessage = <T>(result: ApiResult<T>): ApiResult<T> => (result.ok ? result : { ...result, message: firstError(result) });
 
 /** Upcoming and past events I can see, merged. */
@@ -158,13 +176,24 @@ export async function fetchEvent(eventId: string): Promise<ApiResult<OutlyEvent>
   return { ok: true, data: event };
 }
 
-export async function createEventRequest(values: EventFormValues): Promise<ApiResult<OutlyEvent>> {
-  const result = withMessage(await callBackend<BackendEvent>("POST", "events", toBody(values)));
+export async function createEventRequest(
+  values: EventFormValues,
+  onUploadProgress?: (percent: number) => void,
+): Promise<ApiResult<OutlyEvent>> {
+  const result = withMessage(
+    await callBackend<BackendEvent>("POST", "events", toRequestBody(values), onUploadProgress),
+  );
   return result.ok ? { ok: true, data: mapEvent(result.data) } : result;
 }
 
-export async function editEventRequest(eventId: string, values: EventFormValues): Promise<ApiResult<OutlyEvent>> {
-  const result = withMessage(await callBackend<BackendEvent>("PATCH", `events/${eventId}`, toBody(values)));
+export async function editEventRequest(
+  eventId: string,
+  values: EventFormValues,
+  onUploadProgress?: (percent: number) => void,
+): Promise<ApiResult<OutlyEvent>> {
+  const result = withMessage(
+    await callBackend<BackendEvent>("PATCH", `events/${eventId}`, toRequestBody(values), onUploadProgress),
+  );
   return result.ok ? { ok: true, data: mapEvent(result.data) } : result;
 }
 

@@ -15,6 +15,10 @@ Unsplash photo ids are the `photo-…` part of the original image URL.
 | landing/golden-hour-nandi.jpg | Kodakandla Dheeraj | 1671995703377-12d9519ea259 |
 | landing/whispering-pines.jpg | Ivan Stepanov | 1762513066458-7e8bfee2d7f1 |
 | landing/lakeside-meetup.jpg | Vitaly Gariev | 1758272960256-45397872790b |
+| landing/hero-peaks.jpg | Toomas Tartes | 1551632811-561732d1e306 |
+| landing/explore-viewpoint.jpg | Steve Taylor | 1560766858-1ae399f60084 |
+| landing/explore-lake-camp.jpg | Keriliwi | 1682868796363-d2fb6a50dd3a |
+| landing/explore-tea-gardens.jpg | kaliebmann _ | 1674384696285-a4239c8609b7 |
 | places/kedarkantha-trail.jpg | Toomas Tartes | 1551632811-561732d1e306 |
 | places/sinhagad-viewpoint.jpg | Steve Taylor | 1560766858-1ae399f60084 |
 | places/pawna-lake-campsite.jpg | Keriliwi | 1682868796363-d2fb6a50dd3a |

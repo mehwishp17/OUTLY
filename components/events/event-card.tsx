@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
+import { EventCover } from "@/components/events/event-cover";
 import { CoverImage } from "@/components/ui/cover-image";
 import { Icon } from "@/components/ui/icon";
 import { useExplorePhoto } from "@/lib/use-explore-photo";
@@ -56,10 +57,14 @@ export function EventCard({ event }: EventCardProps) {
       <div
         className="relative flex h-32 items-end overflow-hidden p-4 sm:h-40"
         style={{ backgroundImage: CATEGORY_GRADIENT[event.category] }}
-        role="img"
-        aria-label={`${event.title} — illustrative event visual`}
+        role={event.coverUrl ? undefined : "img"}
+        aria-label={event.coverUrl ? undefined : `${event.title} — illustrative event visual`}
       >
-        {photo ? <CoverImage src={photo} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" /> : null}
+        {event.coverUrl ? (
+          <EventCover src={event.coverUrl} alt={`Cover image for ${event.title}`} />
+        ) : photo ? (
+          <CoverImage src={photo} sizes="(min-width: 1024px) 380px, (min-width: 640px) 50vw, 100vw" />
+        ) : null}
         <span className="relative flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
           <Icon name={EVENT_CATEGORY_ICONS[event.category]} className="h-3.5 w-3.5" />
           {EVENT_CATEGORY_LABELS[event.category]}

@@ -44,6 +44,7 @@ class Event(TimeStamped):
     visibility = models.CharField(max_length=10, choices=Visibility.choices, default=Visibility.PUBLIC)
     approval_status = models.CharField(max_length=10, choices=ApprovalStatus.choices, default=ApprovalStatus.APPROVED)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    cover_image = models.ImageField(upload_to="events/%Y/%m/", null=True, blank=True)
 
     class Meta:
         constraints = [

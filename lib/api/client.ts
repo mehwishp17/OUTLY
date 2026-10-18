@@ -40,22 +40,54 @@ export const UNREACHABLE = "We couldn't reach OUTLY right now. Please try again 
 /** Request body: JSON-serialisable value, or `FormData` for file uploads. */
 type Body = unknown;
 
+/** Sends a `FormData` body with XMLHttpRequest, which (unlike `fetch`) reports upload progress. */
+function postFormWithProgress(
+  method: string,
+  url: string,
+  form: FormData,
+  onProgress: (percent: number) => void,
+): Promise<{ status: number; ok: boolean; json: () => Promise<unknown> } | null> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.responseType = "text";
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => resolve(null);
+    xhr.onabort = () => resolve(null);
+    xhr.onload = () =>
+      resolve({
+        status: xhr.status,
+        ok: xhr.status >= 200 && xhr.status < 300,
+        json: async () => JSON.parse(xhr.responseText),
+      });
+    xhr.send(form);
+  });
+}
+
 async function send<T>(
   method: string,
   path: string,
   body?: Body,
+  onUploadProgress?: (percent: number) => void,
 ): Promise<{ result: ApiResult<T>; meta?: PageMeta }> {
-  let response: Response;
+  let response: { status: number; ok: boolean; json: () => Promise<unknown> } | null;
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   try {
-    response = await fetch(`/api/backend/${path}`, {
-      method,
-      headers: body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
-    });
+    if (isForm && onUploadProgress && typeof XMLHttpRequest !== "undefined") {
+      response = await postFormWithProgress(method, `/api/backend/${path}`, body as FormData, onUploadProgress);
+    } else {
+      response = await fetch(`/api/backend/${path}`, {
+        method,
+        headers: body === undefined || isForm ? undefined : { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
+      });
+    }
   } catch {
-    return { result: { ok: false, status: 0, message: UNREACHABLE } };
+    response = null;
   }
+  if (!response) return { result: { ok: false, status: 0, message: UNREACHABLE } };
 
   if (response.status === 204) return { result: { ok: true, data: undefined as T } };
 
@@ -79,8 +111,13 @@ async function send<T>(
   };
 }
 
-export async function callBackend<T>(method: string, path: string, body?: Body): Promise<ApiResult<T>> {
-  return (await send<T>(method, path, body)).result;
+export async function callBackend<T>(
+  method: string,
+  path: string,
+  body?: Body,
+  onUploadProgress?: (percent: number) => void,
+): Promise<ApiResult<T>> {
+  return (await send<T>(method, path, body, onUploadProgress)).result;
 }
 
 /** One page of a list: items in `data`, cursor/offset info in `meta`. */
