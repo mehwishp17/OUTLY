@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
+from apps.common.uploads import absolute_url
 from apps.follows.selectors import blocked_ids, is_blocked_between
 from apps.notifications.services import NotificationService, user_group
 
@@ -24,7 +25,7 @@ def message_payload(message, viewer_id=None):
         "conversation": message.conversation_id,
         "sender_id": message.sender_id,
         "sender_name": profile.display_name or profile.username,
-        "sender_photo": profile.photo.url if profile.photo else None,
+        "sender_photo": absolute_url(None, profile.photo),
         "content": "" if message.is_deleted else message.content,
         "created_at": message.created_at.isoformat(),
         "edited_at": message.edited_at.isoformat() if message.edited_at else None,

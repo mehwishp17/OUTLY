@@ -63,9 +63,23 @@ WebSockets: `POST /api/v1/chats/ws-ticket/` returns a 60-second ticket; connect 
   you want to migrate later.
 - **Background work**: notifications and badge evaluation run right after the transaction commits
   (`transaction.on_commit`), not in a queue. Celery is not installed; add it when volume needs it.
-- **Media** is stored on the local filesystem (`MEDIA_ROOT`). Swap `STORAGES["default"]` for
-  S3-compatible storage in production. Orphaned uploads (never attached to a post) should be
-  purged by a scheduled job.
+- **Media** (avatars, post photos, event covers, group images) has two modes, chosen by the environment:
+  - **Local (default):** files go to `MEDIA_ROOT` and are served by Django. Fine for development and
+    tests, but **lost on hosts with an ephemeral disk** (e.g. Render without a persistent disk).
+  - **Cloudinary (persistent):** active only when `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and
+    `CLOUDINARY_API_SECRET` are **all** set (the free tier is enough to start). Uploads then go to
+    Cloudinary through `apps/common/storage.py` and the API returns full `https://res.cloudinary.com/...`
+    URLs; the local `/media/` route is not mounted. Tests always use local storage and never call
+    Cloudinary (`config/test_settings.py` forces it).
+  - Validation is identical in both modes (`validate_image()`, `MEDIA_MAX_UPLOAD_MB`, default 5 MB).
+  - API media URLs are always full URLs. `PUBLIC_API_URL` (optional, empty by default) is only used to
+    complete local `/media/...` paths where there is no request, i.e. WebSocket chat payloads; set it
+    to the API's public origin if you run local storage behind a different front-end origin.
+  - **Switching an existing deployment:** files already stored locally are **not** copied to
+    Cloudinary. Database rows keep their old names, which will not exist on Cloudinary, so those old
+    images stop loading; users/organizers must re-upload them (there is no migration script).
+  - Deleting an avatar removes it from Cloudinary; replacing an image does not delete the previous
+    one yet, and orphaned uploads (never attached to a post) still need a scheduled purge.
 
 ## Login performance (measured, no hosting cost change)
 

@@ -14,3 +14,4 @@ whitenoise>=6.9
 gunicorn>=23
 dj-database-url>=2.3
 argon2-cffi>=23.1
+cloudinary==1.46.3

@@ -162,6 +162,18 @@ STORAGES = {
 }
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
+# Persistent media: Cloudinary is used only when all three variables are set; otherwise uploads
+# stay on the local filesystem exactly as above.
+CLOUDINARY_CLOUD_NAME = env("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY = env("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = env("CLOUDINARY_API_SECRET", "")
+USE_CLOUDINARY = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
+if USE_CLOUDINARY:
+    STORAGES["default"] = {"BACKEND": "apps.common.storage.CloudinaryMediaStorage"}
+# Public base URL of this API (e.g. https://api.example.com), used only to turn local media paths
+# into full URLs where no request is available (WebSocket payloads). Empty = leave paths relative.
+PUBLIC_API_URL = env("PUBLIC_API_URL", "").rstrip("/")
+
 # ---- Cache / channel layer -------------------------------------------------
 REDIS_URL = env("REDIS_URL", "")
 if REDIS_URL:

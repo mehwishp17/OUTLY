@@ -24,8 +24,18 @@ def validate_image(upload):
     return upload
 
 
+def absolutize(request, url):
+    """Full URL for a media URL. Cloudinary already returns https URLs; local storage returns
+    a path, which is made absolute from the request (or, without one, PUBLIC_API_URL if set)."""
+    if not url or url.startswith(("http://", "https://")):
+        return url
+    if request:
+        return request.build_absolute_uri(url)
+    base = getattr(settings, "PUBLIC_API_URL", "")
+    return f"{base}{url}" if base else url
+
+
 def absolute_url(request, file_field):
     if not file_field:
         return None
-    url = file_field.url
-    return request.build_absolute_uri(url) if request else url
+    return absolutize(request, file_field.url)

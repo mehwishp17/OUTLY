@@ -9,7 +9,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.common.uploads import absolute_url
+from apps.common.uploads import absolute_url, absolutize
 from apps.follows.selectors import blocked_ids
 
 from .models import UserBadge
@@ -70,10 +70,13 @@ class LeaderboardView(APIView):
             board = self._compute(metric, period)
             cache.set(key, board, 60)  # public aggregate, shared by all viewers
         hidden = blocked_ids(request.user)
-        rows = [r for r in board if r["user_id"] not in hidden][:limit]
+        rows = [dict(r, photo=absolutize(request, r["photo"])) for r in board if r["user_id"] not in hidden][:limit]
         for rank, row in enumerate(rows, start=1):
             row["rank"] = rank
-        mine = next((dict(r, rank=i) for i, r in enumerate(board, start=1) if r["user_id"] == request.user.id), None)
+        mine = next(
+            (dict(r, rank=i, photo=absolutize(request, r["photo"])) for i, r in enumerate(board, start=1) if r["user_id"] == request.user.id),
+            None,
+        )
         response = Response(rows)
         response.meta = {"metric": metric, "period": period, "me": mine}
         return response

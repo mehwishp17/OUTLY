@@ -18,3 +18,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {k: "100000/min" for k in REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]},  # noqa: F405
 }
 MEDIA_ROOT = BASE_DIR / "media_test"  # noqa: F405
+# Never talk to Cloudinary from tests, even if real credentials are present in backend/.env.
+USE_CLOUDINARY = False
+STORAGES = {**STORAGES, "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}}  # noqa: F405
+CLOUDINARY_CLOUD_NAME = CLOUDINARY_API_KEY = CLOUDINARY_API_SECRET = ""
+PUBLIC_API_URL = ""
