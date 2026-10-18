@@ -1,9 +1,18 @@
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 
 export function FinalCtaSection() {
   return (
-    <section id="final-cta" className="relative overflow-hidden gradient-brand py-20 sm:py-28">
+    <section id="final-cta" className="relative isolate overflow-hidden gradient-brand py-20 sm:py-24 lg:py-28">
+      <Image
+        src="/images/landing/lakeside-meetup.jpg"
+        alt=""
+        fill
+        sizes="100vw"
+        className="-z-10 object-cover opacity-30 mix-blend-luminosity"
+      />
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-[var(--outly-night)]/60 to-transparent" />
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -top-20 right-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"
@@ -21,7 +30,7 @@ export function FinalCtaSection() {
       </svg>
 
       <Reveal className="relative mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold text-white sm:text-4xl">
+        <h2 className="text-3xl font-bold tracking-tight text-white sm:text-5xl">
           Your next adventure starts here.
         </h2>
         <p className="mt-4 text-base leading-relaxed text-white/85 sm:text-lg">

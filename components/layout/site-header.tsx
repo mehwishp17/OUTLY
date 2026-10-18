@@ -54,6 +54,8 @@ export function SiteHeader() {
   // that can only happen while the Hero (and therefore the header) is
   // already in view.
   const hidden = !isHeroVisible && !isMenuOpen;
+  // Over the hero photo the bar is unfilled, so text switches to white.
+  const onDark = !isScrolled;
 
   return (
     <header
@@ -65,8 +67,15 @@ export function SiteHeader() {
         hidden ? "-translate-y-full" : "translate-y-0",
       )}
     >
-      <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        <OutlyLogo width={40} height={40} priority variant="transparent" quality={100} />
+      <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between px-4 py-2 sm:px-6 md:min-h-24 lg:px-8">
+        <OutlyLogo
+          width={80}
+          height={80}
+          priority
+          variant="transparent"
+          quality={100}
+          className="h-16! w-16! md:h-20! md:w-20!"
+        />
 
         <nav aria-label="Primary" className="hidden md:block">
           <ul className="flex items-center gap-8">
@@ -74,7 +83,12 @@ export function SiteHeader() {
               <li key={link.href}>
                 <a
                   href={link.href}
-                  className="relative text-sm font-medium text-[var(--outly-ink)] transition-colors after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:w-0 after:bg-[var(--outly-violet)] after:transition-all after:duration-200 hover:text-[var(--outly-violet)] hover:after:w-full motion-reduce:after:transition-none"
+                  className={cn(
+                    "relative text-sm font-medium transition-colors after:absolute after:-bottom-1 after:left-0 after:h-0.5 after:w-0 after:transition-all after:duration-200 hover:after:w-full motion-reduce:after:transition-none",
+                    onDark
+                      ? "text-white after:bg-white hover:text-white"
+                      : "text-[var(--outly-ink)] after:bg-[var(--outly-violet)] hover:text-[var(--outly-violet)]",
+                  )}
                 >
                   {link.label}
                 </a>
@@ -86,7 +100,12 @@ export function SiteHeader() {
         <div className="hidden items-center gap-3 md:flex">
           <a
             href="/login"
-            className="rounded-[var(--radius-sm)] px-2 py-1 text-sm font-semibold text-[var(--outly-ink)] transition-colors hover:text-[var(--outly-violet)]"
+            className={cn(
+              "rounded-[var(--radius-sm)] px-2 py-1 text-sm font-semibold transition-colors",
+              onDark
+                ? "text-white hover:text-white/80"
+                : "text-[var(--outly-ink)] hover:text-[var(--outly-violet)]",
+            )}
           >
             Log in
           </a>
@@ -97,7 +116,12 @@ export function SiteHeader() {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--outly-border)] text-[var(--outly-ink)] md:hidden"
+          className={cn(
+            "inline-flex h-10 w-10 items-center justify-center rounded-full border md:hidden",
+            onDark
+              ? "border-white/40 bg-white/10 text-white"
+              : "border-[var(--outly-border)] text-[var(--outly-ink)]",
+          )}
           aria-expanded={isMenuOpen}
           aria-controls="mobile-nav"
           aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -110,7 +134,7 @@ export function SiteHeader() {
       <div
         id="mobile-nav"
         className={`grid overflow-hidden border-t border-[var(--outly-border)] bg-white transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none md:hidden ${
-          isMenuOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          isMenuOpen ? "grid-rows-[1fr] opacity-100" : "max-h-0 grid-rows-[0fr] border-t-0 opacity-0"
         }`}
       >
         <div className="min-h-0 px-4 py-4">
