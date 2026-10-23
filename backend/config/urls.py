@@ -34,9 +34,9 @@ urlpatterns = [
     path("api/v1/", include(api_v1)),
 ]
 # Uploaded media. django's `static()` helper returns nothing when DEBUG is off,
-# so uploads would 404 in production; `serve` works in every mode. Used only
-# while media is stored locally (MEDIA_URL is a path, not an external URL).
-if settings.MEDIA_URL.startswith("/") and not settings.USE_CLOUDINARY:
+# so uploads would 404 in production; `serve` works in every mode. Mounted whenever MEDIA_URL is
+# a path: with Cloudinary on it only serves files that were stored locally before it was enabled.
+if settings.MEDIA_URL.startswith("/"):
     urlpatterns += [
         re_path(
             rf"^{settings.MEDIA_URL.lstrip('/')}(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}

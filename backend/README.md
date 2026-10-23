@@ -69,15 +69,17 @@ WebSockets: `POST /api/v1/chats/ws-ticket/` returns a 60-second ticket; connect 
   - **Cloudinary (persistent):** active only when `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and
     `CLOUDINARY_API_SECRET` are **all** set (the free tier is enough to start). Uploads then go to
     Cloudinary through `apps/common/storage.py` and the API returns full `https://res.cloudinary.com/...`
-    URLs; the local `/media/` route is not mounted. Tests always use local storage and never call
-    Cloudinary (`config/test_settings.py` forces it).
+    URLs (built without a file extension, because Cloudinary normalises formats, e.g. `.jfif` to jpg). Files
+    that were stored locally before Cloudinary was enabled are still served from `/media/` when they exist
+    on disk. Tests always use local storage and never call Cloudinary (`config/test_settings.py` forces it).
   - Validation is identical in both modes (`validate_image()`, `MEDIA_MAX_UPLOAD_MB`, default 5 MB).
   - API media URLs are always full URLs. `PUBLIC_API_URL` (optional, empty by default) is only used to
     complete local `/media/...` paths where there is no request, i.e. WebSocket chat payloads; set it
     to the API's public origin if you run local storage behind a different front-end origin.
   - **Switching an existing deployment:** files already stored locally are **not** copied to
-    Cloudinary. Database rows keep their old names, which will not exist on Cloudinary, so those old
-    images stop loading; users/organizers must re-upload them (there is no migration script).
+    Cloudinary. Database rows keep their old names. While the old files remain on disk they keep loading
+    from `/media/`; on a host with an ephemeral disk they are already gone, so those images must be
+    re-uploaded (there is no migration script).
   - Deleting an avatar removes it from Cloudinary; replacing an image does not delete the previous
     one yet, and orphaned uploads (never attached to a post) still need a scheduled purge.
 

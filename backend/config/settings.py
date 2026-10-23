@@ -30,6 +30,14 @@ def env_bool(name, default=False):
     return str(env(name, str(default))).lower() in ("1", "true", "yes", "on")
 
 
+def env_int(name, default):
+    """Integer from the environment; a missing, empty or malformed value falls back to `default`."""
+    try:
+        return int(env(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def env_list(name, default=""):
     return [item.strip() for item in env(name, default).split(",") if item.strip()]
 
@@ -265,8 +273,23 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_CONTENT_TYPE_NOSNIFF = True
 
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "OUTLY <no-reply@outly.local>")
+# Email. Nothing configured -> the console backend (mail is printed to the terminal), exactly as before.
+# Setting EMAIL_HOST (e.g. Brevo: smtp-relay.brevo.com, port 587, EMAIL_USE_TLS=true) switches to Django's
+# SMTP backend, unless EMAIL_BACKEND names a backend explicitly. Credentials and the sender address come
+# only from the environment; empty values count as "not set".
+EMAIL_HOST = env("EMAIL_HOST") or "localhost"
+EMAIL_BACKEND = env("EMAIL_BACKEND") or (
+    "django.core.mail.backends.smtp.EmailBackend" if env("EMAIL_HOST") else "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_PORT = env_int("EMAIL_PORT", 25)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER") or ""
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD") or ""
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", False)
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 10)  # seconds; a stuck SMTP server must not hang the request
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise RuntimeError("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled (use TLS on port 587, SSL on port 465).")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL") or "OUTLY <no-reply@outly.local>"
 
 # ---- Product rules -------------------------------------------------------------
 EVENTS_REQUIRE_MODERATION = env_bool("EVENTS_REQUIRE_MODERATION", False)

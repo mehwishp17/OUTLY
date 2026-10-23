@@ -7,9 +7,12 @@ back through the storage (uploads are validated before they are saved), so `open
 import logging
 import os
 import uuid
+from pathlib import Path
+from urllib.parse import urljoin
 
 from django.conf import settings
 from django.core.files.storage import Storage
+from django.utils.encoding import filepath_to_uri
 
 logger = logging.getLogger("outly.media")
 
@@ -55,14 +58,25 @@ class CloudinaryMediaStorage(Storage):
         )
         return name.replace("\\", "/")
 
+    def _legacy_local_url(self, name):
+        """URL of a file that was stored on local disk before Cloudinary was enabled, else None."""
+        root = Path(settings.MEDIA_ROOT).resolve()
+        path = (root / name).resolve()
+        if path.is_relative_to(root) and path.is_file():
+            return urljoin(settings.MEDIA_URL, filepath_to_uri(name))
+        return None
+
     def url(self, name):
         import cloudinary.utils
 
+        legacy = self._legacy_local_url(name)
+        if legacy:
+            return legacy
         self._configure()
-        public_id, fmt = self._split(name)
-        url, _ = cloudinary.utils.cloudinary_url(
-            public_id, format=fmt or None, secure=True, resource_type="image", type="upload"
-        )
+        # No file extension: Cloudinary serves the format it stored (it normalises e.g. .jfif to
+        # jpg, and answers 404 for a URL that carries the original, unsupported extension).
+        public_id, _ = self._split(name)
+        url, _ = cloudinary.utils.cloudinary_url(public_id, secure=True, resource_type="image", type="upload")
         return url
 
     def exists(self, name):

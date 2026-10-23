@@ -12,6 +12,7 @@ from PIL import Image
 from rest_framework.test import APIRequestFactory
 
 from apps.activities.models import Activity, ActivityParticipant
+from apps.events.models import Event
 from apps.common.uploads import absolute_url, absolutize
 from apps.groups.models import Group
 from apps.messaging.models import Conversation, Message
@@ -127,7 +128,7 @@ def test_cloudinary_mode_uploads_return_https_urls_and_nothing_is_written_locall
     c = client_for(alice)
     created = data(c.post("/api/v1/events/", event_form(cover=image_upload()), format="multipart"))
     cover = created["cover_image"]
-    assert cover.startswith(CLOUD_PREFIX + "events/") and cover.endswith(".png")
+    assert cover.startswith(CLOUD_PREFIX + "events/") and "." not in cover.rsplit("/", 1)[1]  # no extension
     avatar = data(c.post("/api/v1/users/me/photo/", {"photo": image_upload("me.png")}, format="multipart"))["photo"]
     assert avatar.startswith(CLOUD_PREFIX + "avatars/")
     media = data(c.post("/api/v1/media/", {"file": image_upload()}, format="multipart"))["url"]
@@ -138,7 +139,8 @@ def test_cloudinary_mode_uploads_return_https_urls_and_nothing_is_written_locall
     # the stored name round-trips: detail endpoint returns the same https URL
     assert data(c.get(f"/api/v1/events/{created['id']}/"))["cover_image"] == cover
     # nothing was written under MEDIA_ROOT for these uploads
-    assert not (settings.MEDIA_ROOT / created["cover_image"].split(CLOUD_PREFIX)[1]).exists()
+    stored = Event.objects.get(pk=created["id"]).cover_image.name
+    assert stored.startswith("events/") and not (settings.MEDIA_ROOT / stored).exists()
 
 
 def test_cloudinary_mode_group_image_and_post_photos_are_https(alice, client_for, cloud_calls):
@@ -209,3 +211,33 @@ def test_production_settings_pick_cloudinary_only_when_all_three_variables_are_s
     )
     assert result.returncode == 0, result.stderr[-500:]
     assert result.stdout.strip() == expected_backend
+
+
+def test_cloudinary_url_ignores_the_original_extension(alice, cloud_calls):
+    """Cloudinary stores a .jfif upload as jpg and answers 404 for a URL ending in .jfif."""
+    group = Group.objects.create(name="Trekkers", category="hiking", description="d", owner=alice)
+    group.image.save("treking.jfif", image_upload("treking.jfif"), save=True)
+    assert group.image.name.endswith(".jfif")  # the stored name keeps the original name
+    url = absolute_url(None, group.image)
+    assert url.startswith(CLOUD_PREFIX + "groups/") and ".jfif" not in url and not url.endswith(".png")
+    assert "jfif" not in cloud_calls["upload"][0]["public_id"]  # the Cloudinary id carries no extension
+
+
+def test_cloudinary_mode_still_serves_files_stored_locally_before_it_was_enabled(alice, client_for, cloud_calls, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    (tmp_path / "posts" / "2026" / "10").mkdir(parents=True)
+    (tmp_path / "posts" / "2026" / "10" / "legacy.png").write_bytes(image_upload().read())
+    from apps.posts.models import Post, PostMedia
+
+    post = Post.objects.create(author=alice, caption="old post")
+    PostMedia.objects.create(post=post, uploader=alice, image="posts/2026/10/legacy.png")
+    missing = Post.objects.create(author=alice, caption="never uploaded")
+    PostMedia.objects.create(post=missing, uploader=alice, image="posts/2026/10/nowhere.png")
+
+    posts = {p["caption"]: p for p in data(client_for(alice).get("/api/v1/posts/"))}
+    assert posts["old post"]["photos"] == ["http://testserver/media/posts/2026/10/legacy.png"]
+    assert posts["never uploaded"]["photos"][0].startswith(CLOUD_PREFIX + "posts/")  # not local: Cloudinary URL
+    from django.urls import resolve
+
+    assert resolve("/media/posts/2026/10/legacy.png").func.__name__ == "serve"  # the route is mounted in this mode
+

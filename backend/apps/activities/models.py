@@ -31,6 +31,7 @@ class Activity(TimeStamped):
     privacy = models.CharField(max_length=10, choices=Privacy.choices, default=Privacy.PUBLIC)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PLANNED)
     completed_at = models.DateTimeField(null=True, blank=True)
+    cover_image = models.ImageField(upload_to="activities/%Y/%m/", null=True, blank=True)
 
     class Meta:
         constraints = [
