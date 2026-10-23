@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { LocationField } from "@/components/explore/location-field";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -108,12 +109,13 @@ function EditProfileFormFields() {
         error={errors.username}
         hint="Letters, numbers, and underscores only."
       />
-      <Input
+      <LocationField
         id="profile-location"
         label="Location"
         value={values.location}
-        onChange={(event) => updateField("location", event.target.value)}
+        onChange={(location) => updateField("location", location)}
         placeholder="e.g. Bengaluru, Karnataka"
+        maxLength={120}
       />
       <Textarea
         id="profile-bio"

@@ -1,25 +1,16 @@
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 
 export function FinalCtaSection() {
   return (
-    <section id="final-cta" className="relative isolate overflow-hidden gradient-brand py-20 sm:py-24 lg:py-28">
-      <Image
-        src="/images/landing/lakeside-meetup.jpg"
-        alt=""
-        fill
-        sizes="100vw"
-        className="-z-10 object-cover opacity-30 mix-blend-luminosity"
-      />
-      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-t from-[var(--outly-night)]/60 to-transparent" />
+    <section id="final-cta" className="relative overflow-hidden gradient-brand py-12 sm:py-14">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -top-20 right-10 h-64 w-64 rounded-full bg-white/10 blur-3xl"
       />
       <svg
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full opacity-20"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full opacity-20"
         viewBox="0 0 400 80"
         preserveAspectRatio="none"
       >
@@ -29,19 +20,24 @@ export function FinalCtaSection() {
         />
       </svg>
 
-      <Reveal className="relative mx-auto max-w-3xl px-4 text-center sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-bold tracking-tight text-white sm:text-5xl">
+      <Reveal visibleByDefault className="relative mx-auto max-w-2xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-2xl font-bold text-white sm:text-3xl">
           Your next adventure starts here.
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-white/85 sm:text-lg">
-          Create a free account, find your people, and discover the places
+        <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-white/90">
+          Create an account, find your people, and discover the places
           worth exploring — all in one community-driven platform.
         </p>
-        <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-          <Button href="/signup" variant="secondary" size="lg">
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <Button href="/signup" variant="secondary" size="md">
             Create Account
           </Button>
-          <Button href="#explore" variant="ghost" size="lg" className="text-white hover:bg-white/10">
+          <Button
+            href="#explore"
+            variant="ghost"
+            size="md"
+            className="border border-transparent text-white hover:bg-white/10"
+          >
             Explore places
           </Button>
         </div>

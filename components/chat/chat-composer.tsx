@@ -39,7 +39,7 @@ export function ChatComposer({ onSend }: ChatComposerProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-[var(--outly-border)] bg-white/90 p-3 sm:p-4">
+    <div className="flex flex-col gap-2 border-t border-[var(--outly-border)] bg-[var(--outly-night)]/90 p-3 sm:p-4">
       {sendError ? <FormError id="chat-send-error">{sendError}</FormError> : null}
       <div className="flex items-end gap-2">
       <div className="flex-1">

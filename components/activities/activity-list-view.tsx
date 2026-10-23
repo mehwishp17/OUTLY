@@ -2,17 +2,46 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { ActivitiesSidebar } from "@/components/activities/activities-sidebar";
 import { ActivityCard } from "@/components/activities/activity-card";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { Icon } from "@/components/ui/icon";
-import { LoadingState } from "@/components/ui/loading-state";
 import { Tabs } from "@/components/ui/tabs";
 import { useActivityStore } from "@/context/activity-store-context";
 import type { Activity } from "@/types/activity";
 
 function sortByStartAtDesc(activities: Activity[]): Activity[] {
   return [...activities].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+}
+
+/** Placeholder cards while the activities load (the status text is for screen readers). */
+function ActivitiesSkeleton() {
+  return (
+    <div role="status" className="flex flex-col gap-5">
+      <span className="sr-only">Loading activities…</span>
+      {[0, 1].map((key) => (
+        <div
+          key={key}
+          aria-hidden="true"
+          className="animate-pulse overflow-hidden rounded-[var(--radius-lg)] border border-white/10 bg-[#17121f] motion-reduce:animate-none"
+        >
+          <div className="flex items-center gap-3 px-5 py-4">
+            <div className="h-11 w-11 rounded-full bg-white/10" />
+            <div className="space-y-2">
+              <div className="h-3 w-32 rounded-full bg-white/10" />
+              <div className="h-2.5 w-20 rounded-full bg-white/[0.07]" />
+            </div>
+          </div>
+          <div className="aspect-[16/7] bg-white/[0.06]" />
+          <div className="space-y-3 px-5 py-4">
+            <div className="h-4 w-2/3 rounded-full bg-white/10" />
+            <div className="h-3 w-1/2 rounded-full bg-white/[0.07]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function ActivityGroup({ activities }: { activities: Activity[] }) {
@@ -25,7 +54,7 @@ function ActivityGroup({ activities }: { activities: Activity[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {activities.map((activity) => (
         <ActivityCard key={activity.id} activity={activity} />
       ))}
@@ -51,7 +80,7 @@ export function ActivityListView() {
   // Loading/error show inside the tabs, so the selected tab survives the data arriving.
   const notice =
     status === "loading" && activities.length === 0 ? (
-        <LoadingState message="Loading activities…" />
+        <ActivitiesSkeleton />
     ) : status === "error" && activities.length === 0 ? (
         <ErrorState
           title="We couldn't load activities"
@@ -65,7 +94,8 @@ export function ActivityListView() {
     ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 lg:py-12">
+    <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,36rem)_19rem] lg:justify-center lg:py-10">
+      <div className="flex min-w-0 flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--outly-ink)] sm:text-3xl">
@@ -75,7 +105,7 @@ export function ActivityListView() {
             Plan your next adventure or look back on where you&apos;ve been.
           </p>
         </div>
-        <Button href="/activities/new" className="w-fit">
+        <Button href="/activities/new" className="w-fit shrink-0 whitespace-nowrap">
           <Icon name="plus" className="h-4 w-4" />
           Create activity
         </Button>
@@ -93,6 +123,9 @@ export function ActivityListView() {
       <p className="text-center text-xs text-[var(--outly-muted)]">
         Looking for trails and places to plan around? <Link href="/explore" className="font-semibold text-[var(--outly-violet)] hover:text-[var(--outly-purple-dark)]">Browse Explore</Link>.
       </p>
+      </div>
+
+      <ActivitiesSidebar activities={activities} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { NotificationListView } from "@/components/notifications/notification-list-view";
 
 export const metadata: Metadata = {
@@ -9,9 +9,8 @@ export const metadata: Metadata = {
 
 export default function NotificationsPage() {
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <NotificationListView />
-    </div>
+    </FeedPageShell>
   );
 }

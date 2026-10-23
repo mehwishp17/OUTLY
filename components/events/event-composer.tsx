@@ -7,7 +7,8 @@ import { FormError } from "@/components/ui/form-error";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { fetchExplore } from "@/lib/api/places";
+import { LocationField } from "@/components/explore/location-field";
+import { PlacePicker } from "@/components/explore/place-picker";
 import { COVER_IMAGE_TYPES, validateCoverImage, validateEventForm } from "@/lib/validation/event-schema";
 import {
   EVENT_CATEGORY_LABELS,
@@ -64,7 +65,6 @@ export function EventComposer({
     visibility: initialValues?.visibility ?? "public",
   });
   const [errors, setErrors] = useState<EventFormErrors>({});
-  const [places, setPlaces] = useState<ExplorePlace[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
   // Cover image: the saved one (if any), a newly chosen file with a local preview, or removal.
@@ -105,17 +105,6 @@ export function EventComposer({
     setExistingCoverUrl(undefined);
   }
 
-  // The places and trails an event can be linked to come from Explore.
-  useEffect(() => {
-    let cancelled = false;
-    void fetchExplore().then((result) => {
-      if (!cancelled && result.ok) setPlaces(result.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
@@ -141,11 +130,10 @@ export function EventComposer({
     }
   }
 
-  function handlePlaceChange(placeId: string) {
-    const place = places.find((candidate) => exploreKey(candidate) === placeId);
+  function handlePlaceSelect(place: ExplorePlace | undefined) {
     setValues((current) => ({
       ...current,
-      placeId: placeId || undefined,
+      placeId: place ? exploreKey(place) : undefined,
       location: place ? place.location : current.location,
       difficulty: place ? place.difficulty : current.difficulty,
     }));
@@ -160,9 +148,9 @@ export function EventComposer({
         <div className="space-y-2">
           <span className="block text-sm font-semibold text-[var(--outly-ink)]">Cover image (optional)</span>
           {shownCover ? (
-            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-[var(--radius-sm)] bg-[var(--outly-lavender)]">
+            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-[var(--radius-sm)] border border-[var(--outly-border)] bg-black/30">
               {/* eslint-disable-next-line @next/next/no-img-element -- blob preview or backend-served cover. */}
-              <img src={shownCover} alt="Selected event cover preview" className="h-full w-full object-cover" />
+              <img src={shownCover} alt="Selected event cover preview" className="h-full w-full object-contain" />
             </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
@@ -248,31 +236,19 @@ export function EventComposer({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="event-place" className="block text-sm font-semibold text-[var(--outly-ink)]">
-            Link a place or trail (optional)
-          </label>
-          <select
-            id="event-place"
-            value={values.placeId ?? ""}
-            onChange={(event) => handlePlaceChange(event.target.value)}
-            className="w-full rounded-[var(--radius-sm)] border border-[var(--outly-border)] bg-white px-4 py-2.5 text-sm text-[var(--outly-ink)] shadow-[var(--shadow-soft)] transition-colors focus:border-[var(--outly-violet)] focus:outline-none"
-          >
-            <option value="">None</option>
-            {places.map((place) => (
-              <option key={exploreKey(place)} value={exploreKey(place)}>
-                {place.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <PlacePicker
+          id="event-place"
+          label="Link a place or trail (optional)"
+          value={values.placeId}
+          onChange={handlePlaceSelect}
+        />
 
-        <Input
+        <LocationField
           id="event-location"
           label="Location"
           required
           value={values.location}
-          onChange={(event) => setValues((current) => ({ ...current, location: event.target.value }))}
+          onChange={(location) => setValues((current) => ({ ...current, location }))}
           error={errors.location}
           placeholder="e.g. Sinhagad, Pune"
         />

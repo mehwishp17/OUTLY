@@ -36,6 +36,8 @@ export type Activity = {
   notes?: string;
   privacy: ActivityPrivacy;
   status: ActivityStatus;
+  /** Cover image served by the backend (absolute URL); absent when the creator didn't add one. */
+  coverUrl?: string;
   /** Total participants (always present, including in list responses). */
   participantCount: number;
   /** Who is taking part — loaded with the activity's detail. */
@@ -54,6 +56,10 @@ export type CreateActivityInput = {
   notes?: string;
   privacy: ActivityPrivacy;
   status: ActivityStatus;
+  /** A newly chosen cover image to upload (create or replace). */
+  coverFile?: File | null;
+  /** True when the creator removed the existing cover without choosing a new one. */
+  removeCover?: boolean;
 };
 
 export type EditActivityInput = CreateActivityInput;

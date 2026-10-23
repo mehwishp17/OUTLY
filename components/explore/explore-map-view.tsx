@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { LeafletMap } from "@/components/explore/leaflet-map";
+import type { MapMarker } from "@/components/explore/leaflet-map";
 import { Icon } from "@/components/ui/icon";
 import { ErrorState } from "@/components/ui/error-state";
 import { LoadingState } from "@/components/ui/loading-state";
@@ -9,17 +12,21 @@ import { fetchExplore } from "@/lib/api/places";
 import { PLACE_CATEGORY_ICONS, PLACE_CATEGORY_LABELS, exploreKey } from "@/types/place";
 import type { ExplorePlace } from "@/types/place";
 
+const detailHref = (place: ExplorePlace) =>
+  place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
+
 /**
- * Schematic map view. There is no map provider/API key configured, so pins
- * are placed on an illustrative canvas using positions derived from each
- * place's real coordinates (`mapPosition`, a percentage of the canvas). A plain linked list is always shown alongside it as the
- * non-map alternative required by the Frontend Responsive & Accessibility
- * guidelines ("Map interactions should have non-map alternatives").
+ * Explore map: a real, zoomable/pannable map (`LeafletMap`) with one marker per place or trail
+ * at its actual coordinates (a trail's marker is its start point). A plain list is always shown
+ * alongside it as the non-map alternative required by the accessibility guidelines.
  */
 export function ExploreMapView() {
+  const router = useRouter();
   const [places, setPlaces] = useState<ExplorePlace[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string>();
+  const [focus, setFocus] = useState<{ key: string; n: number }>();
+  const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +34,7 @@ export function ExploreMapView() {
       if (cancelled) return;
       if (result.ok) {
         setPlaces(result.data);
+        setError(undefined);
         setStatus("ready");
       } else {
         setError(result.message);
@@ -36,13 +44,43 @@ export function ExploreMapView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadCount]);
+
+  const markers = useMemo<MapMarker[]>(
+    () =>
+      places.flatMap((place) =>
+        place.latitude !== undefined && place.longitude !== undefined
+          ? [
+              {
+                key: exploreKey(place),
+                lat: place.latitude,
+                lng: place.longitude,
+                title: place.name,
+                subtitle: `${PLACE_CATEGORY_LABELS[place.category]} · ${place.location}`,
+                href: detailHref(place),
+              },
+            ]
+          : [],
+      ),
+    [places],
+  );
+  const withoutCoordinates = places.length - markers.length;
 
   if (status === "loading") return <LoadingState message="Loading the map…" />;
   if (status === "error") {
     return (
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
         <ErrorState title="We couldn't load the map" description={error} />
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("loading");
+            setReloadCount((count) => count + 1);
+          }}
+          className="mt-3 text-sm font-semibold text-[var(--outly-violet)]"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -55,7 +93,7 @@ export function ExploreMapView() {
             Explore map
           </h1>
           <p className="mt-1 text-sm text-[var(--outly-muted)]">
-            An illustrative overview of where each trail and place sits relative to the others.
+            Every pin is at the real location of a trail or place. Select a pin for details.
           </p>
         </div>
         <Link
@@ -67,64 +105,58 @@ export function ExploreMapView() {
         </Link>
       </div>
 
-      <div
-        role="img"
-        aria-label="Schematic map of trails and places — see the list below for an accessible, non-visual alternative."
-        className="relative h-80 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-[var(--outly-lavender)] shadow-[var(--shadow-soft)] sm:h-96"
-      >
-        <svg className="absolute inset-0 h-full w-full opacity-40" aria-hidden="true">
-          <defs>
-            <pattern id="explore-map-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--outly-border)" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#explore-map-grid)" />
-        </svg>
-
-        {places.map((place) => {
-          const detailHref =
-            place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
-          return (
-            <Link
-              key={exploreKey(place)}
-              href={detailHref}
-              aria-hidden="true"
-              tabIndex={-1}
-              title={place.name}
-              style={{ left: `${place.mapPosition.x}%`, top: `${place.mapPosition.y}%` }}
-              className="absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-[var(--shadow-elevated)] transition-transform hover:scale-110 gradient-brand motion-reduce:transition-none"
-            >
-              <Icon name={PLACE_CATEGORY_ICONS[place.category]} className="h-4 w-4" />
-            </Link>
-          );
-        })}
-      </div>
+      {places.length === 0 ? (
+        <p className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white px-5 py-10 text-center text-sm text-[var(--outly-muted)] shadow-[var(--shadow-soft)]">
+          There are no trails or places to show on the map yet.
+        </p>
+      ) : (
+        <LeafletMap
+          markers={markers}
+          focus={focus}
+          onNavigate={(href) => router.push(href)}
+          label="Map of trails and places"
+          className="isolate z-0 h-80 w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--outly-border)] shadow-[var(--shadow-soft)] sm:h-96"
+        />
+      )}
 
       <div className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
           All locations
         </h2>
+        {withoutCoordinates > 0 ? (
+          <p className="mt-2 text-xs text-[var(--outly-muted)]">
+            {withoutCoordinates} {withoutCoordinates === 1 ? "item has" : "items have"} no coordinates yet and
+            {withoutCoordinates === 1 ? " is" : " are"} listed here but not on the map.
+          </p>
+        ) : null}
         <ul className="mt-3 divide-y divide-[var(--outly-border)]">
           {places.map((place) => {
-            const detailHref =
-              place.kind === "trail" ? `/explore/trails/${place.id}` : `/explore/places/${place.id}`;
+            const key = exploreKey(place);
+            const onMap = markers.some((marker) => marker.key === key);
             return (
-              <li key={exploreKey(place)}>
+              <li key={key} className="flex items-center gap-3 py-3">
                 <Link
-                  href={detailHref}
-                  className="flex items-center gap-3 py-3 transition-colors hover:text-[var(--outly-violet)]"
+                  href={detailHref(place)}
+                  className="flex min-w-0 flex-1 items-center gap-3 transition-colors hover:text-[var(--outly-violet)]"
                 >
                   <Icon name={PLACE_CATEGORY_ICONS[place.category]} className="h-4.5 w-4.5 shrink-0 text-[var(--outly-violet)]" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-[var(--outly-ink)]">
-                      {place.name}
-                    </span>
+                    <span className="block text-sm font-semibold text-[var(--outly-ink)]">{place.name}</span>
                     <span className="block text-xs text-[var(--outly-muted)]">
                       {PLACE_CATEGORY_LABELS[place.category]} · {place.location}
                     </span>
                   </span>
-                  <Icon name="arrow-right" className="h-4 w-4 shrink-0 text-[var(--outly-muted)]" />
                 </Link>
+                {onMap ? (
+                  <button
+                    type="button"
+                    onClick={() => setFocus((current) => ({ key, n: (current?.n ?? 0) + 1 }))}
+                    className="shrink-0 rounded-full border border-[var(--outly-border)] px-3 py-1 text-xs font-semibold text-[var(--outly-violet)] hover:border-[var(--outly-violet)]/60"
+                    aria-label={`Show ${place.name} on the map`}
+                  >
+                    Show on map
+                  </button>
+                ) : null}
               </li>
             );
           })}

@@ -1,97 +1,138 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { COMMUNITY_MEMBERS, COMMUNITY_STATS } from "@/lib/constants";
+import type { IconName } from "@/components/ui/icon";
+
+// What you can do on OUTLY today: labels only, no figures.
+const HIGHLIGHTS: { icon: IconName; label: string }[] = [
+  { icon: "trail", label: "Trails and places" },
+  { icon: "calendar", label: "Group events" },
+  { icon: "users", label: "Groups and partners" },
+  { icon: "message-circle", label: "Chat" },
+];
 
 /**
- * Immersive hero: a full-bleed trail photo sits behind the (transparent)
- * navbar, with a brand-colour scrim for text legibility. Content rises in
- * and the photo settles once on load (CSS only).
+ * Cinematic hero: a full-bleed trail photo (`landing-hero.jpg`) under a dark gradient, the headline and
+ * both calls to action on the left, and two framed photos on large screens. Content rises in with a short
+ * stagger and the photo settles once on load; two soft glows drift very slowly. Everything is CSS and
+ * transform/opacity only, and is switched off by `prefers-reduced-motion`. The text is in the HTML from the
+ * start, so nothing waits on JavaScript.
  */
 export function HeroSection() {
   return (
-    <section className="relative -mt-20 overflow-hidden bg-[var(--outly-night)] md:-mt-24">
-      <div
-        className="absolute inset-0"
-        style={{ backgroundImage: "var(--gradient-night)" }}
-      >
+    <section className="relative isolate overflow-hidden bg-[var(--outly-night)] text-white">
+      <div className="absolute inset-0 -z-10">
         <Image
-          src="/images/landing/hero-peaks.jpg"
-          alt="Two hikers with backpacks walking a mountain trail toward snow-capped peaks"
+          src="/images/landing/landing-hero.jpg"
+          alt="A hiker with a red backpack walking a mountain trail toward rocky peaks"
           fill
           priority
+          quality={75}
           sizes="100vw"
-          style={{ objectPosition: "50% 40%" }}
+          style={{ objectPosition: "30% 55%" }}
           className="animate-image-settle object-cover motion-reduce:animate-none"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-r from-[var(--outly-night)]/85 via-[var(--outly-night)]/45 to-transparent"
+          className="absolute inset-0 bg-gradient-to-r from-[var(--outly-night)] via-[var(--outly-night)]/80 to-[var(--outly-night)]/30"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-[var(--outly-night)]/70 via-transparent to-[var(--outly-night)]/40"
+          className="absolute inset-0 bg-gradient-to-t from-[var(--outly-night)] via-transparent to-[var(--outly-night)]/40"
         />
       </div>
+      <div
+        aria-hidden="true"
+        className="animate-drift-a pointer-events-none absolute -left-32 top-8 -z-10 h-[28rem] w-[28rem] rounded-full bg-[var(--outly-violet)] opacity-30 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="animate-drift-b pointer-events-none absolute -right-24 bottom-0 -z-10 h-96 w-96 rounded-full bg-[var(--outly-pink)] opacity-20 blur-3xl"
+      />
 
-      <div className="relative mx-auto flex min-h-[40rem] max-w-7xl flex-col justify-center gap-10 px-4 pb-14 pt-32 sm:px-6 md:min-h-[44rem] md:pt-36 lg:min-h-[48rem] lg:flex-row lg:items-end lg:justify-between lg:px-8 lg:pb-16">
-        <div className="max-w-2xl animate-rise motion-reduce:animate-none">
-          <p className="mb-6 inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-sm">
+      <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+        <div>
+          <p className="animate-rise inline-flex items-center gap-2 rounded-[var(--radius-pill)] border border-white/20 bg-white/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/90 motion-reduce:animate-none">
             Explore · Connect · Belong
           </p>
-          <h1 className="text-5xl font-bold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-7xl">
+          <h1 className="animate-rise mt-5 text-4xl font-bold leading-[1.05] tracking-tight [animation-delay:80ms] motion-reduce:animate-none sm:text-5xl lg:text-6xl xl:text-7xl">
             Find your next{" "}
-            <span className="bg-gradient-to-r from-[var(--outly-violet)] to-[var(--outly-pink)] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[var(--outly-pink)] via-[var(--outly-pink-bright)] to-[var(--outly-violet)] bg-clip-text text-transparent">
               place to explore.
             </span>
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
-            OUTLY helps you discover trails and destinations worth the trip, meet
-            like-minded people along the way, and belong to a community built
-            around real adventures.
+          <p className="animate-rise mt-5 max-w-xl text-base leading-relaxed text-white/80 [animation-delay:160ms] motion-reduce:animate-none sm:text-lg">
+            OUTLY helps you discover trails and destinations worth the trip, meet like-minded people along the way,
+            and belong to a community built around real adventures.
           </p>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button href="#explore" size="lg">
-              Start exploring
-              <Icon name="arrow-right" className="h-4 w-4" />
+          <div className="animate-rise mt-8 flex flex-col gap-3 [animation-delay:240ms] motion-reduce:animate-none sm:flex-row">
+            <Button href="/signup" size="lg">
+              Create your account
             </Button>
-            <Button
-              href="#community"
-              variant="ghost"
-              size="lg"
-              className="border border-white/40 text-white backdrop-blur-sm hover:bg-white/15"
-            >
-              Discover communities
+            <Button href="#explore" variant="secondary" size="lg">
+              Explore places
             </Button>
           </div>
 
-          <div className="mt-8 flex items-center gap-3 text-sm text-white/80">
-            <ul className="flex -space-x-2" aria-hidden="true">
-              {COMMUNITY_MEMBERS.slice(0, 4).map((member) => (
-                <li
-                  key={member.name}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/80 text-[10px] font-semibold text-white"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, ${member.gradientFrom}, ${member.gradientTo})`,
-                  }}
-                >
-                  {member.initials}
-                </li>
-              ))}
-            </ul>
-            <span>Join thousands of explorers finding their next adventure.</span>
-          </div>
+          <ul
+            aria-label="What you can do on OUTLY"
+            className="animate-rise mt-8 flex flex-wrap gap-2 [animation-delay:320ms] motion-reduce:animate-none"
+          >
+            {HIGHLIGHTS.map((item) => (
+              <li
+                key={item.label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/85"
+              >
+                <Icon name={item.icon} className="h-3.5 w-3.5 text-[var(--outly-pink)]" />
+                {item.label}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <dl className="glass-panel-dark grid animate-rise grid-cols-3 gap-4 rounded-[var(--radius-md)] p-5 text-white [animation-delay:160ms] motion-reduce:animate-none sm:gap-6 sm:p-6 lg:w-80 lg:grid-cols-1 lg:gap-5">
-          {COMMUNITY_STATS.map((stat) => (
-            <div key={stat.label} className="flex flex-col-reverse lg:flex-row lg:items-baseline lg:justify-between lg:gap-4">
-              <dt className="mt-0.5 text-xs text-white/70 lg:mt-0 lg:text-sm">{stat.label}</dt>
-              <dd className="text-2xl font-bold sm:text-3xl">{stat.value}</dd>
+        <div className="animate-rise hidden flex-col gap-4 [animation-delay:200ms] motion-reduce:animate-none lg:flex">
+          <figure className="group relative w-11/12 self-start overflow-hidden rounded-[var(--radius-lg)] border border-white/15 shadow-[var(--shadow-elevated)]">
+            <div className="relative aspect-[4/3]">
+              <Image
+                src="/images/groups/weekend-wanderers.jpg"
+                alt="Three hikers in helmets looking down at a turquoise lake from a cliff path"
+                fill
+                quality={75}
+                sizes="(min-width: 1280px) 30vw, 38vw"
+                style={{ objectPosition: "55% 60%" }}
+                className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-t from-[var(--outly-night)]/70 via-transparent to-transparent"
+              />
             </div>
-          ))}
-        </dl>
+            <figcaption className="glass-panel-dark absolute bottom-3 left-3 rounded-full px-3 py-1 text-xs font-semibold">
+              Explore with other people
+            </figcaption>
+          </figure>
+          <figure className="group relative w-3/4 self-end overflow-hidden rounded-[var(--radius-lg)] border border-white/15 shadow-[var(--shadow-elevated)]">
+            <div className="relative aspect-[4/3]">
+              <Image
+                src="/images/groups/trail-runners.jpg"
+                alt="Trail runners on a narrow forest path among spring flowers"
+                fill
+                quality={75}
+                sizes="(min-width: 1280px) 22vw, 28vw"
+                style={{ objectPosition: "45% 40%" }}
+                className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-t from-[var(--outly-night)]/70 via-transparent to-transparent"
+              />
+            </div>
+            <figcaption className="glass-panel-dark absolute bottom-3 left-3 rounded-full px-3 py-1 text-xs font-semibold">
+              Find your pace
+            </figcaption>
+          </figure>
+        </div>
       </div>
     </section>
   );

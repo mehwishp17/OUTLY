@@ -53,11 +53,11 @@ export function CommentItem({ postId, comment }: CommentItemProps) {
         <Avatar name={comment.authorName} avatarUrl={comment.authorAvatarUrl} size="sm" />
       </Link>
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2 rounded-[var(--radius-md)] bg-[var(--outly-lavender)] px-3.5 py-2.5">
+        <div className="flex items-start justify-between gap-2 rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.05] px-3.5 py-2.5">
           <div className="min-w-0">
             <Link
               href={`/people/${comment.authorId}`}
-              className="text-sm font-semibold text-[var(--outly-ink)] hover:text-[var(--outly-violet)]"
+              className="text-sm font-semibold text-white transition-colors hover:text-[var(--outly-pink)]"
             >
               {comment.authorName}
             </Link>
@@ -74,7 +74,7 @@ export function CommentItem({ postId, comment }: CommentItemProps) {
                 />
               </div>
             ) : (
-              <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-[var(--outly-ink)]">
+              <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-white/90">
                 {comment.content}
               </p>
             )}

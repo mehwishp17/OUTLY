@@ -25,20 +25,28 @@ type AuthShellProps = {
  */
 export function AuthShell({ children, formSurface = "card", brandPanel }: AuthShellProps) {
   return (
-    <div className="grid min-h-svh bg-white lg:grid-cols-2">
+    <div className="auth-dark grid min-h-svh bg-[var(--outly-night)] lg:grid-cols-2">
       {brandPanel ?? <AuthBrandPanel />}
 
-      <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-12">
-        <div className="w-full max-w-md">
+      <div className="relative flex flex-col items-center justify-center overflow-hidden bg-[#17121f] px-4 py-10 sm:px-6 lg:px-12">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[var(--outly-purple)] opacity-30 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-28 -left-20 h-72 w-72 rounded-full bg-[var(--outly-pink-bright)] opacity-10 blur-3xl"
+        />
+        <div className="relative w-full max-w-md">
           <div className="mb-8 flex flex-col items-center text-center lg:hidden">
-            <OutlyLogo width={44} height={44} priority variant="transparent" quality={100} />
+            <OutlyLogo width={64} height={64} priority variant="transparent" quality={100} />
           </div>
 
           <div
             className={
               formSurface === "plain"
                 ? undefined
-                : "rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8"
+                : "rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white/[0.04] p-6 shadow-[var(--shadow-soft)] sm:p-8"
             }
           >
             {children}
@@ -47,7 +55,7 @@ export function AuthShell({ children, formSurface = "card", brandPanel }: AuthSh
           <p className="mt-6 text-center text-sm text-[var(--outly-muted)]">
             <Link
               href="/"
-              className="font-semibold text-[var(--outly-violet)] hover:text-[var(--outly-purple-dark)]"
+              className="font-semibold text-[var(--outly-violet)] transition-colors hover:text-[var(--outly-purple-dark)] motion-reduce:transition-none"
             >
               ← Back to OUTLY
             </Link>

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { ActivityDetailView } from "@/components/activities/activity-detail-view";
 
 export const metadata: Metadata = {
@@ -15,9 +15,8 @@ export default async function ActivityDetailPage({ params }: ActivityDetailPageP
   const { activityId } = await params;
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <ActivityDetailView activityId={activityId} />
-    </div>
+    </FeedPageShell>
   );
 }

@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ChipButton } from "@/components/ui/chip-button";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { FormError } from "@/components/ui/form-error";
-import { fetchExplore } from "@/lib/api/places";
+import { LocationField } from "@/components/explore/location-field";
+import { PlacePicker } from "@/components/explore/place-picker";
 import { validateActivityForm } from "@/lib/validation/activity-schema";
+import { COVER_IMAGE_TYPES, validateCoverImage } from "@/lib/validation/event-schema";
 import { ACTIVITY_PRIVACY_LABELS, ACTIVITY_TYPE_LABELS } from "@/types/activity";
 import type {
   ActivityFormErrors,
@@ -23,6 +26,9 @@ const ACTIVITY_TYPE_OPTIONS = Object.keys(ACTIVITY_TYPE_LABELS) as ActivityKind[
 const PRIVACY_OPTIONS = Object.keys(ACTIVITY_PRIVACY_LABELS) as ActivityPrivacy[];
 const DIFFICULTY_OPTIONS = Object.keys(DIFFICULTY_LABELS) as Difficulty[];
 
+/** Small uppercase heading that groups the form's fields (visual only: the fields keep their order). */
+const SECTION_HEADING = "text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--outly-muted)]";
+
 /** ISO -> the value `<input type="datetime-local">` expects (local time,
  * seconds/ms stripped, no timezone suffix). */
 function toDatetimeLocalValue(iso?: string): string {
@@ -35,7 +41,7 @@ function toDatetimeLocalValue(iso?: string): string {
 type ActivityComposerProps = {
   title: string;
   description?: string;
-  initialValues?: Partial<CreateActivityInput>;
+  initialValues?: Partial<CreateActivityInput> & { coverUrl?: string };
   submitLabel: string;
   /** May return a promise resolving to an error message; the form then stays
    * open and shows it instead of navigating away. */
@@ -65,20 +71,44 @@ export function ActivityComposer({
     status: initialValues?.status ?? "planned",
   });
   const [errors, setErrors] = useState<ActivityFormErrors>({});
-  const [places, setPlaces] = useState<ExplorePlace[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
+  // Cover image: the saved one (if any), a newly chosen file with a local preview, or removal.
+  const [existingCoverUrl, setExistingCoverUrl] = useState(initialValues?.coverUrl);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string>();
+  const [coverError, setCoverError] = useState<string>();
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const coverInputId = useId();
+  const shownCover = coverPreview ?? existingCoverUrl;
 
-  // The places and trails an activity can be linked to come from Explore.
+  // Free the local preview when it is replaced or the form closes.
   useEffect(() => {
-    let cancelled = false;
-    void fetchExplore().then((result) => {
-      if (!cancelled && result.ok) setPlaces(result.data);
-    });
     return () => {
-      cancelled = true;
+      if (coverPreview) URL.revokeObjectURL(coverPreview);
     };
-  }, []);
+  }, [coverPreview]);
+
+  function handleCoverSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const problem = validateCoverImage(file);
+    if (problem) {
+      setCoverError(problem);
+      return;
+    }
+    setCoverError(undefined);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  }
+
+  function handleRemoveCover() {
+    setCoverError(undefined);
+    setCoverFile(null);
+    setCoverPreview(undefined);
+    setExistingCoverUrl(undefined);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,29 +118,35 @@ export function ActivityComposer({
     if (Object.keys(validationErrors).length > 0) return;
     setSubmitting(true);
     setSubmitError(undefined);
-    const error = await onSubmit(values);
+    const error = await onSubmit({
+      ...values,
+      coverFile,
+      // Only meaningful when there was a saved cover and the creator removed it without a replacement.
+      removeCover: !coverFile && !existingCoverUrl && Boolean(initialValues?.coverUrl),
+    });
     if (error) {
       setSubmitError(error);
       setSubmitting(false);
     }
   }
 
-  function handlePlaceChange(placeId: string) {
-    const place = places.find((candidate) => exploreKey(candidate) === placeId);
+  function handlePlaceSelect(place: ExplorePlace | undefined) {
     setValues((current) => ({
       ...current,
-      placeId: placeId || undefined,
+      placeId: place ? exploreKey(place) : undefined,
       location: place ? place.location : current.location,
       difficulty: place ? place.difficulty : current.difficulty,
     }));
   }
 
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
-      <h1 className="text-xl font-bold tracking-tight text-[var(--outly-ink)]">{title}</h1>
+    <div className="rounded-[var(--radius-lg)] border border-white/10 bg-[#17121f] p-6 shadow-[var(--shadow-elevated)] sm:p-8">
+      <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
       {description ? <p className="mt-1 text-sm text-[var(--outly-muted)]">{description}</p> : null}
 
       <form noValidate onSubmit={handleSubmit} className="mt-6 space-y-5">
+        <h2 className={SECTION_HEADING}>The basics</h2>
+
         <Input
           id="activity-title"
           label="Title"
@@ -136,31 +172,21 @@ export function ActivityComposer({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="activity-place" className="block text-sm font-semibold text-[var(--outly-ink)]">
-            Link a place or trail (optional)
-          </label>
-          <select
-            id="activity-place"
-            value={values.placeId ?? ""}
-            onChange={(event) => handlePlaceChange(event.target.value)}
-            className="w-full rounded-[var(--radius-sm)] border border-[var(--outly-border)] bg-white px-4 py-2.5 text-sm text-[var(--outly-ink)] shadow-[var(--shadow-soft)] transition-colors focus:border-[var(--outly-violet)] focus:outline-none"
-          >
-            <option value="">None</option>
-            {places.map((place) => (
-              <option key={exploreKey(place)} value={exploreKey(place)}>
-                {place.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <h2 className={`${SECTION_HEADING} border-t border-white/10 pt-5`}>Where and when</h2>
 
-        <Input
+        <PlacePicker
+          id="activity-place"
+          label="Link a place or trail (optional)"
+          value={values.placeId}
+          onChange={handlePlaceSelect}
+        />
+
+        <LocationField
           id="activity-location"
           label="Location"
           required
           value={values.location}
-          onChange={(event) => setValues((current) => ({ ...current, location: event.target.value }))}
+          onChange={(location) => setValues((current) => ({ ...current, location }))}
           error={errors.location}
           placeholder="e.g. Kedarkantha, Uttarakhand"
         />
@@ -179,6 +205,8 @@ export function ActivityComposer({
           }
           error={errors.startAt}
         />
+
+        <h2 className={`${SECTION_HEADING} border-t border-white/10 pt-5`}>Details</h2>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Input
@@ -237,6 +265,55 @@ export function ActivityComposer({
           onChange={(event) => setValues((current) => ({ ...current, notes: event.target.value }))}
           placeholder="Anything participants should know…"
         />
+
+        <div className="space-y-2">
+          <span className="block text-sm font-semibold text-[var(--outly-ink)]">Cover image (optional)</span>
+          {shownCover ? (
+            // The whole photo is shown (never cropped); the dark backdrop fills any space around it.
+            <div className="flex max-h-72 items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-white/10 bg-black/30">
+              {/* eslint-disable-next-line @next/next/no-img-element -- blob preview or backend-served cover. */}
+              <img src={shownCover} alt="Selected activity cover preview" className="max-h-72 w-auto max-w-full object-contain" />
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={submitting}
+              className={
+                shownCover
+                  ? "inline-flex items-center gap-2 rounded-full border border-[var(--outly-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--outly-ink)] shadow-[var(--shadow-soft)] transition-colors hover:border-[var(--outly-violet)]/60 disabled:pointer-events-none disabled:opacity-50"
+                  : "flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-white/25 bg-white/[0.03] px-4 py-5 text-sm font-semibold text-[var(--outly-ink)] transition-colors hover:border-[var(--outly-pink)]/60 hover:bg-white/[0.06] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
+              }
+            >
+              <Icon name="image" className={shownCover ? "h-4 w-4" : "h-5 w-5 text-[var(--outly-pink)]"} />
+              {shownCover ? "Change image" : "Add cover image"}
+            </button>
+            {shownCover ? (
+              <button
+                type="button"
+                onClick={handleRemoveCover}
+                disabled={submitting}
+                className="rounded-full px-3 py-2 text-sm font-semibold text-[var(--outly-muted)] transition-colors hover:text-[#b3164c] disabled:pointer-events-none disabled:opacity-50"
+              >
+                Remove image
+              </button>
+            ) : null}
+          </div>
+          <input
+            ref={coverInputRef}
+            id={coverInputId}
+            type="file"
+            accept={COVER_IMAGE_TYPES.join(",")}
+            onChange={handleCoverSelected}
+            className="sr-only"
+            aria-label="Choose a cover image"
+          />
+          <p className="text-xs text-[var(--outly-muted)]">JPEG, PNG or WebP, up to 5 MB. Shown on the activity card and page.</p>
+          {coverError ? <FormError id="activity-cover-error">{coverError}</FormError> : null}
+        </div>
+
+        <h2 className={`${SECTION_HEADING} border-t border-white/10 pt-5`}>Sharing</h2>
 
         <div className="space-y-1.5">
           <span className="block text-sm font-semibold text-[var(--outly-ink)]">Visibility</span>

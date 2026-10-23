@@ -24,6 +24,8 @@ export type ExploreCard = {
   title: string;
   description: string;
   icon: "trail" | "map" | "calendar" | "compass";
+  /** Where the card goes. These areas need an account: signed-out visitors are sent to log in first. */
+  href: string;
 };
 
 export const EXPLORE_CARDS: ExploreCard[] = [
@@ -31,56 +33,34 @@ export const EXPLORE_CARDS: ExploreCard[] = [
     category: "Trails",
     title: "Trails and hikes",
     description:
-      "Curated routes ranked by difficulty, elevation, and season so you always know before you go.",
+      "Browse trails with difficulty, distance, ratings, and reviews, and find ones near you.",
     icon: "trail",
+    href: "/explore",
   },
   {
-    category: "Destinations",
-    title: "Hidden destinations",
+    category: "Places",
+    title: "Viewpoints and campsites",
     description:
-      "Lesser-known viewpoints, lakes, and campsites shared by locals and seasoned explorers.",
+      "Viewpoints, campsites, and wildlife spots, each with its own page, reviews, and place on the map.",
     icon: "map",
+    href: "/explore/map",
   },
   {
     category: "Events",
-    title: "Local events",
+    title: "Group events",
     description:
-      "Group hikes, cleanups, and meetups happening near you, updated every week.",
+      "Join group hikes, cleanups, and meetups, with limited spots and organizer approval where needed.",
     icon: "calendar",
+    href: "/events",
   },
   {
-    category: "Experiences",
-    title: "Outdoor experiences",
+    category: "Activities",
+    title: "Outdoor activities",
     description:
-      "Guided adventures and community-led experiences for every skill level.",
+      "Plan and join outdoor activities with other people, and keep a history of the ones you've done.",
     icon: "compass",
+    href: "/activities",
   },
-];
-
-export type CommunityStat = {
-  label: string;
-  value: string;
-};
-
-export const COMMUNITY_STATS: CommunityStat[] = [
-  { label: "Active explorers", value: "42K+" },
-  { label: "Communities", value: "1,200+" },
-  { label: "Events this month", value: "380" },
-];
-
-export type CommunityMember = {
-  name: string;
-  initials: string;
-  gradientFrom: string;
-  gradientTo: string;
-};
-
-export const COMMUNITY_MEMBERS: CommunityMember[] = [
-  { name: "Ariana Fox", initials: "AF", gradientFrom: "#351080", gradientTo: "#7c3aed" },
-  { name: "Devon Ray", initials: "DR", gradientFrom: "#7c3aed", gradientTo: "#ec4899" },
-  { name: "Maya Chen", initials: "MC", gradientFrom: "#ec4899", gradientTo: "#f6339a" },
-  { name: "Sam Rivera", initials: "SR", gradientFrom: "#351080", gradientTo: "#ec4899" },
-  { name: "Priya Nair", initials: "PN", gradientFrom: "#5b21b6", gradientTo: "#f6339a" },
 ];
 
 export type Experience = {
@@ -148,44 +128,17 @@ export const HOW_IT_WORKS_STEPS: Step[] = [
   {
     number: "01",
     title: "Discover",
-    description: "Browse trails, destinations, and events tailored to what you love.",
+    description: "Browse trails, places, and events, and search for what's near you.",
   },
   {
     number: "02",
     title: "Connect",
-    description: "Meet explorers with similar interests and join communities that fit you.",
+    description: "Follow explorers, join groups, and find partners for your next trip.",
   },
   {
     number: "03",
     title: "Belong",
     description: "Show up, share the journey, and become part of a lasting outdoor community.",
-  },
-];
-
-export type Story = {
-  quote: string;
-  name: string;
-  role: string;
-};
-
-export const STORIES: Story[] = [
-  {
-    quote:
-      "I joined for the trails and stayed for the people. My weekends look completely different now.",
-    name: "Neha Kapoor",
-    role: "Member since 2024, Bengaluru",
-  },
-  {
-    quote:
-      "OUTLY made it easy to find a hiking group that actually shows up. Real community, not just an app.",
-    name: "Rohan Mehta",
-    role: "Trail leader, Pune",
-  },
-  {
-    quote:
-      "I moved to a new city and found my closest friends through an OUTLY weekend trek.",
-    name: "Isha Verma",
-    role: "Member since 2025, Delhi",
   },
 ];
 

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AdminAccessGate } from "@/components/admin/admin-access-gate";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { AdminDashboardView } from "@/components/admin/admin-dashboard-view";
 
 export const metadata: Metadata = {
@@ -10,11 +10,10 @@ export const metadata: Metadata = {
 
 export default function AdminDashboardPage() {
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <AdminAccessGate level="administrator">
         <AdminDashboardView />
       </AdminAccessGate>
-    </div>
+    </FeedPageShell>
   );
 }

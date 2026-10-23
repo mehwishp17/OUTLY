@@ -37,6 +37,16 @@ Unsplash photo ids are the `photo-…` part of the original image URL.
 | activities/foothills-cycling.jpg | Tim Foster | 1627044185459-09e6dbc39444 |
 | activities/tea-gardens-walk.jpg | Vasanth Kedige | 1674498260932-6f7d8eed6d9f |
 | profile/cover.jpg | NEOM | 1682686579688-c2ba945eda0e |
+| auth/auth-pond-hikers.jpg | Vladlena Sigal | 1704610077766-7a5e0535638c |
+| auth/auth-ridge-hikers.jpg | JUSTIN BUISSON | 1629185752152-fe65698ddee4 |
+| auth/auth-lake-tent.jpg | Keriliwi | 1682868796363-d2fb6a50dd3a |
+| auth/auth-golden-trail.jpg | David Schultz | 1634093870823-f0fd787de005 |
+
+`auth/*` are the photo collage on the log-in, sign-up, forgot-password and reset-password pages. They are
+the same Unsplash photographs as `activities/sinhagad-weekend-hike.jpg`, `events/kedarkantha-winter-trek.jpg`,
+`landing/explore-lake-camp.jpg` and `landing/community-adventure.jpg`, downloaded again at 2000px wide
+(the local copies are 1200-1600px) and re-encoded as progressive JPEG at quality 80. They are stored
+locally; nothing is loaded from Unsplash at runtime.
 
 `public/images/adventure/*` are earlier, low-resolution reference images (used for the login/signup
 panels and old mock feed posts) and are **not** licensed third-party photography — replace them before

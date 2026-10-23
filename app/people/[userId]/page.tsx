@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { PublicProfileView } from "@/components/social-graph/public-profile-view";
 
 export const metadata: Metadata = {
@@ -15,9 +15,8 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   const { userId } = await params;
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <PublicProfileView key={userId} userId={userId} />
-    </div>
+    </FeedPageShell>
   );
 }

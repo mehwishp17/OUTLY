@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { HeroSection } from "@/components/landing/hero-section";
 import { ExploreSection } from "@/components/landing/explore-section";
 import { CommunitySection } from "@/components/landing/community-section";
+import { ShareSection } from "@/components/landing/share-section";
 import { ExperiencesSection } from "@/components/landing/experiences-section";
 import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { StoriesSection } from "@/components/landing/stories-section";
@@ -24,6 +25,7 @@ export function LandingPage() {
         <HeroSection />
         <ExploreSection />
         <CommunitySection />
+        <ShareSection />
         <ExperiencesSection />
         <HowItWorksSection />
         <StoriesSection />

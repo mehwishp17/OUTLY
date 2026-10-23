@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
+import { PostMedia } from "@/components/feed/post-media";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -100,7 +101,15 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
         Back to activities
       </Link>
 
-      <div className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
+      <div className="rounded-[var(--radius-lg)] border border-white/10 bg-[#17121f] p-6 shadow-[var(--shadow-elevated)] sm:p-8">
+        {activity.coverUrl ? (
+          // The creator's cover image, shown whole (not cropped), flush with the top of the card.
+          <PostMedia
+            images={[activity.coverUrl]}
+            alt={`Cover image for ${activity.title}`}
+            className="-mx-6 -mt-6 mb-6 overflow-hidden rounded-t-[calc(var(--radius-lg)-1px)] sm:-mx-8 sm:-mt-8"
+          />
+        ) : null}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <span
@@ -144,7 +153,13 @@ export function ActivityDetailView({ activityId }: ActivityDetailViewProps) {
           >
             {activity.status === "completed" ? "Completed" : "Upcoming"}
           </span>
-          {activity.difficulty ? <DifficultyBadge difficulty={activity.difficulty} /> : null}
+          {activity.difficulty ? (
+            // The shared badge's "Moderate" text is just under the AA contrast ratio on its pale pill, so it is
+            // darkened here only (the shared badge, used by Explore and Events, is left as it is).
+            <span className={activity.difficulty === "moderate" ? "contents [&>span]:!text-[#6b4a00]" : "contents"}>
+              <DifficultyBadge difficulty={activity.difficulty} />
+            </span>
+          ) : null}
           <span className="text-xs text-[var(--outly-muted)]">
             {ACTIVITY_PRIVACY_LABELS[activity.privacy]}
           </span>

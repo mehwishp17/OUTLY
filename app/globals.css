@@ -250,3 +250,223 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* Landing page: slow ambient glow drift (transform only, decorative). */
+@keyframes outly-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, 6%, 0) scale(1.12);
+  }
+}
+
+@keyframes outly-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  to {
+    transform: translate3d(-5%, -4%, 0) scale(0.95);
+  }
+}
+
+.animate-drift-a {
+  animation: outly-drift-a 24s ease-in-out infinite alternate;
+}
+
+.animate-drift-b {
+  animation: outly-drift-b 30s ease-in-out infinite alternate;
+}
+
+/* "Visible by default" reveal: content is visible in the server HTML and stays visible if scripts
+   fail. It is hidden only after the component arms it (`is-armed`) because it is below the fold. */
+.reveal-soft {
+  transition:
+    opacity var(--reveal-ms, 600ms) ease-out,
+    transform var(--reveal-ms, 600ms) ease-out;
+}
+
+.reveal-soft.is-armed:not(.is-visible) {
+  opacity: 0;
+  transform: translateY(var(--reveal-y, 12px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drift-a,
+  .animate-drift-b {
+    animation: none;
+  }
+
+  .reveal-soft,
+  .reveal-soft.is-armed:not(.is-visible) {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Authentication pages: dark theme                                         */
+/* Scoped to the auth shell (`.auth-dark`). It redefines the design tokens  */
+/* the shared form parts already read (labels, borders, muted text, links), */
+/* so the shared Input/Label/Checkbox/Alert/Button keep their light look    */
+/* everywhere else in the app. The few colours those parts hard-code are    */
+/* overridden below. `--outly-purple-dark` is left alone: the white         */
+/* secondary button uses it for its text.                                   */
+/* ---------------------------------------------------------------------- */
+.auth-dark {
+  --outly-ink: #ffffff;
+  --outly-muted: rgba(255, 255, 255, 0.68);
+  --outly-border: rgba(255, 255, 255, 0.16);
+  --outly-lavender: rgba(255, 255, 255, 0.06);
+  --outly-violet: var(--outly-pink);
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+.auth-dark input:not([type="checkbox"]) {
+  background-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+.auth-dark input:not([type="checkbox"]):not([aria-invalid="true"]):focus {
+  border-color: var(--outly-pink);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.25);
+}
+
+/* A field with an error keeps its red border when focused. */
+.auth-dark input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(255, 143, 171, 0.25);
+}
+
+.auth-dark input[type="checkbox"] {
+  accent-color: var(--outly-pink);
+}
+
+/* Browser autofill would otherwise paint a pale yellow/white field. */
+.auth-dark input:-webkit-autofill,
+.auth-dark input:-webkit-autofill:hover,
+.auth-dark input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
+  -webkit-box-shadow: 0 0 0 1000px #1d1431 inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* Plain text links: pink at rest, white on hover (the shared markup hovers to a dark purple). */
+.auth-dark a[class*="text-[var(--outly-violet)]"]:hover {
+  color: #ffffff;
+}
+
+/* Validation and status colours the shared parts hard-code, lightened to stay readable on dark. */
+.auth-dark p[class*="text-[#B3164C]"] {
+  color: #ff8fab;
+}
+
+.auth-dark div[role="alert"] {
+  background-color: rgba(179, 22, 76, 0.2);
+  border-color: rgba(255, 143, 171, 0.4);
+  color: #ffc2d1;
+}
+
+.auth-dark div[role="status"][class*="1E7A4D"] {
+  background-color: rgba(30, 122, 77, 0.22);
+  border-color: rgba(110, 231, 183, 0.4);
+  color: #a7f3d0;
+}
+
+.auth-dark li[class*="155C39"] {
+  color: #6ee7b7;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Signed-in app: dark theme (opt-in per module with `.app-dark`)           */
+/* Used by the Feed pages first. Like `.auth-dark`, it redefines the tokens */
+/* the shared parts already read, then overrides what they hard-code, so    */
+/* pages WITHOUT the class (Explore, Groups, ...) are not affected.         */
+/* Surfaces use the brand night/ink values: page #120820, cards #17121f.    */
+/* ---------------------------------------------------------------------- */
+.app-dark {
+  --outly-ink: #ffffff;
+  --outly-muted: rgba(255, 255, 255, 0.66);
+  --outly-border: rgba(255, 255, 255, 0.1);
+  --outly-lavender: rgba(255, 255, 255, 0.06);
+  --outly-violet: var(--outly-pink);
+  --outly-purple-dark: #ffffff;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --app-surface: #17121f;
+  --app-surface-raised: #1e1730;
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+.app-dark ::selection {
+  background: rgba(236, 72, 153, 0.35);
+}
+
+/* White cards/pills in shared markup become the charcoal surface. */
+.app-dark .bg-white {
+  background-color: var(--app-surface);
+}
+
+/* The signed-in header: translucent near-black instead of white. */
+.app-dark header {
+  background-color: rgba(18, 8, 32, 0.82);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-dark input:not([type="checkbox"]):not([type="file"]),
+.app-dark textarea {
+  background-color: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+}
+
+.app-dark input:not([type="checkbox"]):not([type="file"]):not([aria-invalid="true"]):focus,
+.app-dark textarea:not([aria-invalid="true"]):focus {
+  border-color: var(--outly-pink);
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.22);
+}
+
+.app-dark input[aria-invalid="true"]:focus,
+.app-dark textarea[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(255, 143, 171, 0.25);
+}
+
+.app-dark input[type="checkbox"] {
+  accent-color: var(--outly-pink);
+}
+
+/* Menus and dialogs must be opaque (they sit over page content). */
+.app-dark [role="menu"],
+.app-dark [role="alertdialog"],
+.app-dark [role="dialog"] {
+  background-color: var(--app-surface-raised);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Colours the shared parts hard-code, lightened to stay readable on dark. */
+.app-dark [class*="text-[#B3164C]"] {
+  color: #ff8fab;
+}
+
+.app-dark [class*="text-[#8A0F3A]"] {
+  color: #ffc2d1;
+}
+
+.app-dark p[class*="text-[#1e7a3a]"] {
+  color: #6ee7b7;
+}
+
+.app-dark div[role="alert"][class*="B3164C"] {
+  background-color: rgba(179, 22, 76, 0.18);
+  border-color: rgba(255, 143, 171, 0.4);
+}
+
+/* The success Alert hard-codes dark green text (#155C39) for light pages, ~2:1 on dark.
+   Same treatment as the auth shell's success banner. */
+.app-dark div[role="status"][class*="1E7A4D"] {
+  background-color: rgba(30, 122, 77, 0.22);
+  border-color: rgba(110, 231, 183, 0.4);
+  color: #a7f3d0;
+}

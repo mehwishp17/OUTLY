@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DifficultyBadge } from "@/components/explore/difficulty-badge";
 import { StarRating } from "@/components/explore/star-rating";
-import { TrailRoutePreview } from "@/components/explore/trail-route-preview";
+import { LocationMap } from "@/components/explore/location-map";
 import { SaveButton } from "@/components/social/save-button";
 import { CoverImage } from "@/components/ui/cover-image";
 import { Icon } from "@/components/ui/icon";
@@ -108,8 +108,8 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
             {PLACE_CATEGORY_LABELS[place.category]}
           </span>
           {place.verified ? (
-            <span className="absolute right-5 top-5 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-[var(--outly-purple-dark)]">
-              <Icon name="shield-check" className="h-3.5 w-3.5" />
+            <span className="absolute right-5 top-5 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
+              <Icon name="shield-check" className="h-3.5 w-3.5 text-[var(--outly-pink)]" />
               Verified
             </span>
           ) : null}
@@ -138,14 +138,8 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
 
           <p className="text-sm leading-relaxed text-[var(--outly-ink)]">{place.description}</p>
 
-          {place.kind === "trail" && place.routePoints ? (
-            <div>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--outly-muted)]">
-                Route preview
-              </h2>
-              <TrailRoutePreview routePoints={place.routePoints} />
-            </div>
-          ) : null}
+          <LocationMap place={place} />
+
 
           {place.facilities.length > 0 ? (
           <div>
@@ -166,9 +160,9 @@ export function ExplorePlaceDetailView({ placeId, expectedKind }: ExplorePlaceDe
           ) : null}
 
           {place.safetyNotes ? (
-            <div className="flex gap-2 rounded-[var(--radius-md)] border border-[var(--outly-border)] bg-[#fdf1d6] px-4 py-3">
-              <Icon name="alert-circle" className="mt-0.5 h-4 w-4 shrink-0 text-[#9a6a00]" />
-              <p className="text-sm leading-relaxed text-[#9a6a00]">{place.safetyNotes}</p>
+            <div className="flex gap-2 rounded-[var(--radius-md)] border border-amber-300/30 bg-amber-400/10 px-4 py-3">
+              <Icon name="alert-circle" className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <p className="text-sm leading-relaxed text-amber-100">{place.safetyNotes}</p>
             </div>
           ) : null}
 

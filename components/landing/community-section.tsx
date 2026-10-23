@@ -1,98 +1,111 @@
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import type { IconName } from "@/components/ui/icon";
 import { Reveal } from "@/components/ui/reveal";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { COMMUNITY_MEMBERS, COMMUNITY_STATS } from "@/lib/constants";
+
+// Compact heading sizes for the landing page (the shared SectionHeading keeps its defaults).
+const COMPACT_HEADING =
+  "[&_h2]:text-2xl sm:[&_h2]:text-3xl lg:[&_h2]:text-4xl [&_h2+p]:mt-3 [&_h2+p]:text-sm sm:[&_h2+p]:text-base";
+
+// What the community side of OUTLY offers today.
+const COMMUNITY_FEATURES: { icon: IconName; title: string; description: string }[] = [
+  { icon: "users", title: "Follow explorers", description: "Follow people whose trips inspire you and see what they share." },
+  { icon: "tent", title: "Join groups", description: "Find groups around the way you like to explore, or start your own." },
+  { icon: "compass", title: "Find a trip partner", description: "Post a partner request for a trip you're planning, or join someone else's." },
+  { icon: "message-circle", title: "Chat", description: "Message the people you meet and plan together." },
+];
+
+const FRAME = "group relative overflow-hidden rounded-[var(--radius-lg)] border border-white/10 shadow-[0_18px_40px_rgba(0,0,0,0.4)]";
+const ZOOM =
+  "object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100";
 
 /**
- * Emphasizes that OUTLY is a community platform, not only a discovery
- * tool: member avatars, group stats, and an activity preview card.
+ * Emphasizes that OUTLY is a community platform, not only a discovery tool. It lists the features that exist
+ * (follows, groups, partner requests, chat) next to a photo collage. There are no member counts, names or
+ * activity figures.
  */
 export function CommunitySection() {
   return (
     <section id="community" className="relative overflow-hidden bg-[var(--outly-night)] py-16 text-white sm:py-20 lg:py-24">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-32 top-0 h-96 w-96 rounded-full opacity-25 blur-3xl gradient-brand"
+        className="animate-drift-b pointer-events-none absolute -left-40 bottom-0 h-[26rem] w-[26rem] rounded-full bg-[var(--outly-pink)] opacity-15 blur-3xl"
       />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <Reveal className="grid gap-10 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-16">
-          <div>
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-center lg:gap-16">
+          <Reveal visibleByDefault>
             <SectionHeading
               eyebrow="Community"
               title="The best places are better together."
               description="OUTLY connects you with people who share your pace, your interests, and your sense of adventure — so every trip becomes a shared story, not a solo checkbox."
               align="left"
               tone="dark"
+              className={COMPACT_HEADING}
             />
 
-            <dl className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-              {COMMUNITY_STATS.map((stat) => (
-                <div
-                  key={stat.label}
-                  className="flex flex-col-reverse rounded-[var(--radius-md)] border border-white/10 bg-white/5 p-5"
-                >
-                  <dt className="mt-1 text-xs uppercase tracking-wide text-white/60">{stat.label}</dt>
-                  <dd className="text-3xl font-bold text-white">{stat.value}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-4 text-xs text-white/40">Illustrative figures for preview purposes.</p>
-          </div>
-
-          <div className="relative isolate flex min-h-[34rem] flex-col justify-end overflow-hidden rounded-[var(--radius-lg)] shadow-[var(--shadow-elevated)] lg:min-h-[38rem]">
-            <Image
-              src="/images/landing/community-adventure.jpg"
-              alt="A group of hikers walking a mountain trail at golden hour"
-              fill
-              sizes="(min-width: 1024px) 560px, 100vw"
-              style={{ objectPosition: "center 40%" }}
-              className="-z-10 object-cover"
-            />
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 -z-10 bg-gradient-to-t from-[var(--outly-night)]/90 via-[var(--outly-night)]/10 to-transparent"
-            />
-            <div className="glass-panel-dark m-4 rounded-[var(--radius-md)] p-5 sm:m-6 sm:p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-white/70">
-                Weekend Ridge Trekkers
-              </h3>
-              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
-                Active group
-              </span>
-            </div>
-
-            <ul className="mt-6 flex -space-x-3" aria-label="Group members">
-              {COMMUNITY_MEMBERS.map((member) => (
-                <li
-                  key={member.name}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[var(--outly-night)] text-xs font-semibold text-white"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, ${member.gradientFrom}, ${member.gradientTo})`,
-                  }}
-                >
-                  <span aria-hidden="true">{member.initials}</span>
-                  <span className="sr-only">{member.name}</span>
+            <ul className="mt-8 grid gap-5 sm:grid-cols-2">
+              {COMMUNITY_FEATURES.map((feature) => (
+                <li key={feature.title} className="flex gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white gradient-brand"
+                  >
+                    <Icon name={feature.icon} className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{feature.title}</h3>
+                    <p className="mt-0.5 text-sm leading-relaxed text-white/65">{feature.description}</p>
+                  </div>
                 </li>
               ))}
-              <li className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[var(--outly-night)] bg-white/10 text-xs font-semibold text-white">
-                <span aria-hidden="true">+38</span>
-                <span className="sr-only">and 38 more members</span>
-              </li>
             </ul>
 
-            <p className="mt-6 text-sm leading-relaxed text-white/70">
-              43 members are joining this Saturday&rsquo;s sunrise trek. RSVP to get trail
-              notes, carpool coordination, and the group chat link.
-            </p>
+            <div className="mt-8">
+              <Button href="/signup" size="md">
+                Join the community
+              </Button>
+            </div>
+          </Reveal>
 
-            <div className="mt-6 flex items-center justify-between rounded-[var(--radius-md)] bg-white/5 p-4">
-              <span className="text-sm text-white/70">Next event</span>
-              <span className="text-sm font-semibold text-white">Sat, 5:30 AM · Trailhead</span>
+          <Reveal visibleByDefault delay={100}>
+            <div className="grid aspect-[5/4] grid-cols-2 grid-rows-2 gap-3 sm:gap-4">
+              <figure className={`${FRAME} row-span-2`}>
+                <Image
+                  src="/images/landing/community-adventure.jpg"
+                  alt="A group of hikers walking a mountain trail at golden hour"
+                  fill
+                  quality={75}
+                  sizes="(min-width: 1024px) 26vw, 46vw"
+                  style={{ objectPosition: "center 62%" }}
+                  className={ZOOM}
+                />
+              </figure>
+              <figure className={FRAME}>
+                <Image
+                  src="/images/groups/campfire-collective.jpg"
+                  alt="A campfire between two green tents with forested mountains behind"
+                  fill
+                  quality={75}
+                  sizes="(min-width: 1024px) 26vw, 46vw"
+                  className={ZOOM}
+                />
+              </figure>
+              <figure className={FRAME}>
+                <Image
+                  src="/images/events/trail-cleanup.jpg"
+                  alt="Five friends and a dog walking together along a leaf-covered forest path in autumn"
+                  fill
+                  quality={75}
+                  sizes="(min-width: 1024px) 26vw, 46vw"
+                  style={{ objectPosition: "60% 55%" }}
+                  className={ZOOM}
+                />
+              </figure>
             </div>
-            </div>
-          </div>
-        </Reveal>
+          </Reveal>
+        </div>
       </div>
     </section>
   );

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { ProfileView } from "@/components/profile/profile-view";
 
 export const metadata: Metadata = {
@@ -14,9 +14,8 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const initialTab = TABS.find((id) => id === tab);
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <ProfileView initialTab={initialTab} />
-    </div>
+    </FeedPageShell>
   );
 }

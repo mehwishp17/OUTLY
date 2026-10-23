@@ -89,7 +89,7 @@ export function ChatDetailView({ conversationId }: ChatDetailViewProps) {
         : undefined;
 
   return (
-    <div className="mx-auto flex h-[calc(100svh-4rem)] w-full max-w-2xl flex-col px-4 sm:px-6">
+    <div className="mx-auto flex h-[calc(100svh-4rem)] w-full max-w-2xl flex-col px-4 sm:px-6 md:h-svh">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--outly-border)] py-4">
         <div className="flex min-w-0 items-center gap-3">
           <Link

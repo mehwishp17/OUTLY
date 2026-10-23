@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { SignupForm } from "@/components/auth/signup-form";
 import { AuthVisualPanel } from "@/components/auth/auth-visual-panel";
-import { ADVENTURE_IMAGES } from "@/lib/adventure-images";
+import { AUTH_IMAGES } from "@/lib/adventure-images";
 
 export const metadata: Metadata = {
   title: "Create Account",
@@ -13,8 +13,9 @@ export default function SignupPage() {
   return (
     <AuthShell formSurface="plain" brandPanel={(
         <AuthVisualPanel
-          image={ADVENTURE_IMAGES.signupHero}
-          sideImages={[ADVENTURE_IMAGES.eventsCamping, ADVENTURE_IMAGES.exploreTrail]}
+          image={AUTH_IMAGES.goldenTrail}
+          position="50% 60%"
+          sideImages={[AUTH_IMAGES.ridgeHikers, AUTH_IMAGES.pondHikers]}
         />
       )}>
       <SignupForm />

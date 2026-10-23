@@ -15,6 +15,14 @@ export const ADVENTURE_IMAGES = {
   profileCover: "/images/profile/cover.jpg",
 } as const;
 
+/** 2000px-wide portrait photos for the authentication pages' photo collage (see docs/image-credits.md). */
+export const AUTH_IMAGES = {
+  pondHikers: "/images/auth/auth-pond-hikers.jpg",
+  ridgeHikers: "/images/auth/auth-ridge-hikers.jpg",
+  lakeTent: "/images/auth/auth-lake-tent.jpg",
+  goldenTrail: "/images/auth/auth-golden-trail.jpg",
+} as const;
+
 export const POST_PHOTOS: Partial<Record<string, string>> = {
   "post-1": `${dir}/badges-achievement.jpg`, // Kedarkantha ridge at sunrise
   "post-2": `${dir}/groups-community.jpg`, // Saturday group hike

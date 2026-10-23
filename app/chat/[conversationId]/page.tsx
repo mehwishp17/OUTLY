@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { ChatDetailView } from "@/components/chat/chat-detail-view";
 
 export const metadata: Metadata = {
@@ -15,9 +15,8 @@ export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
   const { conversationId } = await params;
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <ChatDetailView key={conversationId} conversationId={conversationId} />
-    </div>
+    </FeedPageShell>
   );
 }

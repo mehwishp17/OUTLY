@@ -67,7 +67,7 @@ export function NotificationItem({ notification }: NotificationItemProps) {
         type="button"
         onClick={() => dismiss(notification.id)}
         aria-label="Dismiss notification"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--outly-muted)] transition-colors hover:bg-white hover:text-[var(--outly-violet)]"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--outly-muted)] transition-colors hover:bg-[var(--outly-lavender)] hover:text-[var(--outly-violet)]"
       >
         <Icon name="close" className="h-4 w-4" />
       </button>

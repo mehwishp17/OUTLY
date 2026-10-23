@@ -33,6 +33,7 @@ type BackendActivity = {
   status: string;
   completed_at?: string | null;
   participants_count?: number;
+  cover_image?: string | null;
   created_at: string;
 };
 
@@ -110,6 +111,7 @@ export function mapActivity(raw: BackendActivity): Activity {
     notes: raw.notes || undefined,
     privacy: raw.privacy.toLowerCase() as ActivityPrivacy,
     status: raw.status === "COMPLETED" ? "completed" : "planned",
+    coverUrl: raw.cover_image || undefined,
     participantCount: raw.participants_count ?? 0,
     participants: [],
   };
@@ -145,6 +147,20 @@ function toBody(input: CreateActivityInput): { body?: Record<string, unknown>; e
   return { body };
 }
 
+/** JSON normally; multipart only when a cover file is being uploaded (the backend accepts both). */
+function toRequestBody(input: CreateActivityInput, body: Record<string, unknown>): Record<string, unknown> | FormData {
+  if (input.coverFile) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(body)) {
+      // null (no place/trail/date) is sent as an empty value, which the backend reads as null.
+      form.append(key, value === null ? "" : String(value));
+    }
+    form.append("cover", input.coverFile);
+    return form;
+  }
+  return input.removeCover ? { ...body, remove_cover: true } : body;
+}
+
 export async function fetchActivities(): Promise<ApiResult<Activity[]>> {
   const result = await fetchAll<BackendActivity>("activities", 200);
   return result.ok ? { ok: true, data: result.data.map(mapActivity) } : result;
@@ -169,14 +185,14 @@ function mapParticipant(raw: BackendParticipant): ActivityParticipant {
 export async function createActivityRequest(input: CreateActivityInput): Promise<ApiResult<Activity>> {
   const { body, error } = toBody(input);
   if (!body) return { ok: false, status: 400, message: error ?? "Invalid activity." };
-  const result = await callBackend<BackendActivity>("POST", "activities", body);
+  const result = await callBackend<BackendActivity>("POST", "activities", toRequestBody(input, body));
   return result.ok ? { ok: true, data: mapActivity(result.data) } : { ...result, message: firstError(result) };
 }
 
 export async function editActivityRequest(activityId: string, input: CreateActivityInput): Promise<ApiResult<Activity>> {
   const { body, error } = toBody(input);
   if (!body) return { ok: false, status: 400, message: error ?? "Invalid activity." };
-  const result = await callBackend<BackendActivity>("PATCH", `activities/${activityId}`, body);
+  const result = await callBackend<BackendActivity>("PATCH", `activities/${activityId}`, toRequestBody(input, body));
   return result.ok ? { ok: true, data: mapActivity(result.data) } : { ...result, message: firstError(result) };
 }
 

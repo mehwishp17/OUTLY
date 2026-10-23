@@ -84,9 +84,19 @@ Explore place or trail the event is linked to. Events and activities have no ima
 
 ## Known limitations
 
-* The Explore map is a schematic overview: pins are positioned from the real coordinates but drawn on
-  a plain canvas, not a tile map. Trail route previews come from the seeded `TrailPoint` rows, which
-  were derived from the original design's schematic routes, not recorded GPS tracks.
+* Explore maps are real Leaflet maps (tiles from `NEXT_PUBLIC_MAP_TILE_URL`, OpenStreetMap by
+  default, which is only meant for light use: set a hosted provider and its attribution before
+  production; `NEXT_PUBLIC_*` values are baked in at build time). Place and trail detail pages show
+  a marker at the stored coordinates (a trail's marker is its start point).
+* **Trail routes are not drawn.** The seeded `TrailPoint` rows were generated from the original
+  design's schematic routes (see `seed_explore`), not recorded GPS tracks, and nothing in the schema
+  yet says which points are recorded, so the frontend ignores them and trail pages say the full
+  route isn't available. The map component can draw a route (`ExplorePlace.track`), but nothing
+  supplies one yet. Stored trail `distance_km` values are curated text and do not match those points.
+* GPX import: `apps/places/gpx.py` validates and measures an admin-supplied track (UTF-8 only,
+  DOCTYPE/ENTITY rejected, size/point/coordinate checks, geodesic length). It saves nothing. Check a
+  file from the server shell with `python manage.py check_gpx file.gpx`. Storing a track needs a
+  schema change to record provenance (recorded vs illustrative, importer, time), which is not made.
 
 ## Test notes
 

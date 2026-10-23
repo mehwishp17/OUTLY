@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { CreatePostView } from "@/components/feed/create-post-view";
 
 export const metadata: Metadata = {
@@ -15,9 +15,8 @@ export default async function NewPostPage({ searchParams }: NewPostPageProps) {
   const { groupId } = await searchParams;
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <CreatePostView groupId={groupId} />
-    </div>
+    </FeedPageShell>
   );
 }

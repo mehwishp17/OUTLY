@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { GroupDetailView } from "@/components/groups/group-detail-view";
 
 export const metadata: Metadata = {
@@ -15,9 +15,8 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
   const { groupId } = await params;
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <GroupDetailView groupId={groupId} />
-    </div>
+    </FeedPageShell>
   );
 }

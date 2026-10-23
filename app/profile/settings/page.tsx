@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LogoutButton } from "@/components/auth/logout-button";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { PrivacySettingsForm } from "@/components/profile/privacy-settings-form";
 
 export const metadata: Metadata = {
@@ -10,8 +10,7 @@ export const metadata: Metadata = {
 
 export default function ProfileSettingsPage() {
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 lg:py-12">
         <h1 className="text-2xl font-bold tracking-tight text-[var(--outly-ink)] sm:text-3xl">Privacy settings</h1>
         <p className="mt-1 text-sm text-[var(--outly-muted)]">
@@ -25,6 +24,6 @@ export default function ProfileSettingsPage() {
           <LogoutButton />
         </div>
       </div>
-    </div>
+    </FeedPageShell>
   );
 }

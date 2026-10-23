@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AppHeader } from "@/components/layout/app-header";
+import { FeedPageShell } from "@/components/feed/feed-page-shell";
 import { ExplorePlaceDetailView } from "@/components/explore/explore-place-detail-view";
 
 export const metadata: Metadata = {
@@ -15,9 +15,8 @@ export default async function PlaceDetailPage({ params }: PlaceDetailPageProps) 
   const { placeId } = await params;
 
   return (
-    <div className="min-h-svh bg-[var(--outly-lavender)]">
-      <AppHeader />
+    <FeedPageShell>
       <ExplorePlaceDetailView key={placeId} placeId={placeId} expectedKind="place" />
-    </div>
+    </FeedPageShell>
   );
 }

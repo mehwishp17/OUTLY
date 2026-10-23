@@ -1,12 +1,12 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/form-error";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AvatarRing } from "@/components/feed/post-parts";
 import { useSocialStore } from "@/context/social-store-context";
 import { POST_CONTENT_MAX_LENGTH, validatePostComposer } from "@/lib/validation/post-schema";
 import type { PostComposerErrors } from "@/types/post";
@@ -121,11 +121,11 @@ export function PostComposer({
   }
 
   return (
-    <div className="rounded-[var(--radius-lg)] border border-[var(--outly-border)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
-      <div className="flex items-start gap-3">
-        <Avatar name={currentUser.name} avatarUrl={currentUser.avatarUrl} size="md" />
+    <div className="rounded-[var(--radius-lg)] border border-white/10 bg-[#17121f] p-6 shadow-[var(--shadow-elevated)] sm:p-8">
+      <div className="flex items-start gap-3.5">
+        <AvatarRing name={currentUser.name} avatarUrl={currentUser.avatarUrl} />
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--outly-ink)]">{title}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h1>
           {description ? (
             <p className="mt-1 text-sm text-[var(--outly-muted)]">{description}</p>
           ) : null}
@@ -155,19 +155,24 @@ export function PostComposer({
         />
 
         <div className="space-y-2">
-          <span className="block text-sm font-medium text-[var(--outly-ink)]">Photos</span>
+          <span className="flex items-baseline justify-between text-sm font-semibold text-white">
+            Photos
+            <span className="text-xs font-medium text-[var(--outly-muted)]">
+              {images.length}/{MAX_IMAGES}
+            </span>
+          </span>
 
           {images.length > 0 ? (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-2.5">
               {images.map((image) => (
-                <div key={image} className="relative aspect-square overflow-hidden rounded-[var(--radius-sm)]">
+                <div key={image} className="relative aspect-square overflow-hidden rounded-[var(--radius-md)] ring-1 ring-white/15">
                   {/* eslint-disable-next-line @next/next/no-img-element -- blob preview or backend-served photo. */}
                   <img src={image} alt="" className="h-full w-full object-cover" />
                   <button
                     type="button"
                     onClick={() => handleRemoveImage(image)}
                     aria-label="Remove this photo"
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--outly-night)]/60 text-white transition-colors hover:bg-[var(--outly-night)]/80"
+                    className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur transition-colors hover:bg-black/85"
                   >
                     <Icon name="close" className="h-3.5 w-3.5" />
                   </button>
@@ -180,10 +185,10 @@ export function PostComposer({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={images.length >= MAX_IMAGES}
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--outly-border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--outly-ink)] shadow-[var(--shadow-soft)] transition-colors hover:border-[var(--outly-violet)]/60 disabled:pointer-events-none disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-white/25 bg-white/[0.03] px-4 py-5 text-sm font-semibold text-white transition-colors hover:border-[var(--outly-pink)]/60 hover:bg-white/[0.06] disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none"
           >
-            <Icon name="image" className="h-4 w-4" />
-            Add photos
+            <Icon name="image" className="h-5 w-5 text-[var(--outly-pink)]" />
+            {images.length > 0 ? "Add more photos" : "Add photos"}
           </button>
           <input
             ref={fileInputRef}
